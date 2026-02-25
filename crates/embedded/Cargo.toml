@@ -1,0 +1,13 @@
+[package]
+name = "embedded"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+preact-embedded = { path = "../preact-embedded" }
+embedded-graphics = "0.8"
+fontdue = "0.9"
+rquickjs = { version = "0.11", features = ["macro", "bindgen"] }
+drm = "0.14"
+evdev = "0.13"
+libc = "0.2"

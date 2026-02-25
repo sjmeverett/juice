@@ -1,0 +1,12 @@
+[package]
+name = "preact-embedded"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rquickjs = { version = "0.11", features = ["macro", "bindgen"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+taffy = "0.9"
+fontdue = "0.9"
+embedded-graphics = "0.8"
