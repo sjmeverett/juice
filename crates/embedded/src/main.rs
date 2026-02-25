@@ -2,7 +2,7 @@ mod drm;
 mod input;
 
 use fontdue::{Font, FontSettings};
-use preact_embedded::{engine, layout, render};
+use jsui::{engine, layout, render};
 use rquickjs::function::Func;
 use std::collections::HashMap;
 use std::time::Duration;

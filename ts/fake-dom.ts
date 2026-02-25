@@ -86,10 +86,12 @@ export class NativeTextNode {
 
 // Augment globalThis with our bridge functions
 declare global {
-	var __TREE__: string;
 	var __refreshTree__: () => void;
 	var __dispatchEvent__: (nodeId: number, eventType: string) => void;
-	// Native functions registered by Rust host
+	// Native objects/functions registered by Rust host
+	var renderer: {
+		setTree(json: string): void;
+	};
 	function nativeLog(message: string): void;
 }
 

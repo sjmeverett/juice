@@ -4,7 +4,7 @@ use embedded_graphics_simulator::{
     sdl2::MouseButton, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
 };
 use fontdue::{Font, FontSettings};
-use preact_embedded::{engine, layout, render};
+use jsui::{engine, layout, render};
 use rquickjs::function::Func;
 use std::collections::HashMap;
 

@@ -1,25 +1,49 @@
 use crate::{layout, render, tree};
 use fontdue::Font;
-use rquickjs::{CatchResultExt, Context, Ctx, Runtime};
+use rquickjs::function::{Func, MutFn};
+use rquickjs::{CatchResultExt, Context, Ctx, Object, Runtime};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub struct Engine {
     _rt: Runtime,
     ctx: Context,
+    tree_json: Rc<RefCell<String>>,
 }
 
 impl Engine {
     pub fn new() -> Self {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
+        let tree_json = Rc::new(RefCell::new(String::new()));
 
         ctx.with(|ctx| {
             ctx.eval::<(), _>("globalThis.setTimeout = (fn, ms) => { fn(); };")
                 .catch(&ctx)
                 .unwrap();
+
+            // Register renderer global object
+            let renderer = Object::new(ctx.clone()).unwrap();
+
+            let tree_cell = tree_json.clone();
+            renderer
+                .set(
+                    "setTree",
+                    Func::from(MutFn::from(move |json: String| {
+                        *tree_cell.borrow_mut() = json;
+                    })),
+                )
+                .unwrap();
+
+            ctx.globals().set("renderer", renderer).unwrap();
         });
 
-        Engine { _rt: rt, ctx }
+        Engine {
+            _rt: rt,
+            ctx,
+            tree_json,
+        }
     }
 
     /// Access the JS context directly for registering native functions.
@@ -57,9 +81,7 @@ impl Engine {
     }
 
     pub fn read_tree(&self) -> String {
-        self.ctx.with(|ctx| {
-            ctx.eval("globalThis.__TREE__").catch(&ctx).unwrap()
-        })
+        self.tree_json.borrow().clone()
     }
 }
 

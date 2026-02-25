@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-preact-embedded = { path = "../preact-embedded" }
+jsui = { path = "../jsui" }
 embedded-graphics = "0.8"
 embedded-graphics-simulator = "0.8"
 fontdue = "0.9"

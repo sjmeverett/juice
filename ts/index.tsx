@@ -47,7 +47,7 @@ function serialize(node: FakeNode): SerializedTree {
 globalThis.__refreshTree__ = () => {
 	nodeRegistry = new Map();
 	nextNodeId = 0;
-	globalThis.__TREE__ = JSON.stringify(serialize(container), null, 2);
+	renderer.setTree(JSON.stringify(serialize(container)));
 };
 
 globalThis.__dispatchEvent__ = (nodeId: number, eventType: string) => {
