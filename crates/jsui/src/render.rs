@@ -1,9 +1,7 @@
 use crate::layout::{LayoutTree, NodeContext, RgbColor};
 use embedded_graphics::pixelcolor::{Rgb888, RgbColor as _};
 use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::{
-    CornerRadii, PrimitiveStyle, Rectangle, RoundedRectangle,
-};
+use embedded_graphics::primitives::{CornerRadii, PrimitiveStyle, Rectangle, RoundedRectangle};
 use fontdue::Font;
 use std::collections::HashMap;
 use taffy::NodeId;
@@ -56,14 +54,11 @@ impl Framebuffer {
     /// Returns the raw XRGB8888 pixel buffer for direct memcpy to display.
     pub fn as_xrgb_bytes(&self) -> &[u8] {
         unsafe {
-            std::slice::from_raw_parts(
-                self.pixels.as_ptr() as *const u8,
-                self.pixels.len() * 4,
-            )
+            std::slice::from_raw_parts(self.pixels.as_ptr() as *const u8, self.pixels.len() * 4)
         }
     }
 
-    /// Flush all pixels through a DrawTarget (for simulator or other e-g displays).
+    /// Flush all pixels through a DrawTarget (for simulator or other embedded-graphics displays).
     pub fn flush(&self, display: &mut impl DrawTarget<Color = Rgb888>) {
         for y in 0..self.height {
             for x in 0..self.width {
@@ -126,11 +121,7 @@ impl OriginDimensions for Framebuffer {
     }
 }
 
-pub fn render_tree(
-    fb: &mut Framebuffer,
-    layout_tree: &LayoutTree,
-    fonts: &HashMap<String, Font>,
-) {
+pub fn render_tree(fb: &mut Framebuffer, layout_tree: &LayoutTree, fonts: &HashMap<String, Font>) {
     render_node(fb, &layout_tree.taffy, layout_tree.root, fonts, 0.0, 0.0);
 }
 
@@ -151,7 +142,11 @@ fn render_node(
     let context = taffy.get_node_context(node_id);
 
     match context {
-        Some(NodeContext::Container { background: Some(bg), border_radius, .. }) => {
+        Some(NodeContext::Container {
+            background: Some(bg),
+            border_radius,
+            ..
+        }) => {
             let color = Rgb888::new(bg.r, bg.g, bg.b);
             let style = PrimitiveStyle::with_fill(color);
             let rect = Rectangle::new(
@@ -167,7 +162,12 @@ fn render_node(
                 let _ = rect.into_styled(style).draw(fb);
             }
         }
-        Some(NodeContext::Text { content, color, font_name, font_size }) => {
+        Some(NodeContext::Text {
+            content,
+            color,
+            font_name,
+            font_size,
+        }) => {
             if let Some(font) = fonts.get(font_name) {
                 draw_text(fb, font, content, *font_size, *color, x, y);
             }
@@ -205,8 +205,7 @@ fn draw_text(
                 let coverage = bitmap[row * metrics.width + col];
                 if coverage > 0 {
                     let px = cursor_x as i32 + metrics.xmin + col as i32;
-                    let py = start_y as i32 + ascent as i32 - metrics.ymin
-                        - metrics.height as i32
+                    let py = start_y as i32 + ascent as i32 - metrics.ymin - metrics.height as i32
                         + row as i32;
 
                     fb.blend_pixel(px, py, color, coverage);

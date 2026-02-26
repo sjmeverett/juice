@@ -1,5 +1,5 @@
-use serde::de::{self, Deserializer};
 use serde::Deserialize;
+use serde::de::{self, Deserializer};
 
 #[derive(Debug)]
 pub enum WidgetNode {
@@ -22,7 +22,6 @@ pub struct Props {
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StyleProps {
-    // Visual
     pub background: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_px")]
     pub border_radius: Option<f32>,
@@ -30,7 +29,7 @@ pub struct StyleProps {
     pub font: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_px")]
     pub font_size: Option<f32>,
-    // Layout
+
     pub flex_direction: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_px")]
     pub flex_grow: Option<f32>,
@@ -72,10 +71,7 @@ pub struct StyleProps {
 
 /// Parse a value that can be a number or a string like "20px" into f32.
 fn parse_px(s: &str) -> Option<f32> {
-    s.strip_suffix("px")
-        .unwrap_or(s)
-        .parse::<f32>()
-        .ok()
+    s.strip_suffix("px").unwrap_or(s).parse::<f32>().ok()
 }
 
 fn deserialize_opt_px<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<f32>, D::Error> {
