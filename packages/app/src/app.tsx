@@ -7,10 +7,8 @@ export function App() {
 	const [count, setCount] = useState(0);
 	return (
 		<Screen style={{ background: "#000000" }}>
-			<Label
-				style={{ color: "#ffffff", font: "CabinetGrotesk-Bold", fontSize: 72 }}
-			>
-				Hello World
+			<Label style={{ color: "#ffffff", font: "Roboto-Bold", fontSize: 72 }}>
+				Hello, World!
 			</Label>
 			<Label>Count: {count}</Label>
 			<Button

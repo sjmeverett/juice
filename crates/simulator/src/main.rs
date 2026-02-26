@@ -11,6 +11,22 @@ use std::collections::HashMap;
 const DISPLAY_WIDTH: u32 = 480;
 const DISPLAY_HEIGHT: u32 = 320;
 
+fn make_engine(bundle: &str) -> engine::Engine {
+    let eng = engine::Engine::new();
+    eng.with_context(|ctx| {
+        ctx.globals()
+            .set(
+                "nativeLog",
+                Func::from(|msg: String| {
+                    println!("[JS] {}", msg);
+                }),
+            )
+            .unwrap();
+    });
+    eng.boot(bundle);
+    eng
+}
+
 fn main() {
     // Load all fonts from assets directory
     let mut fonts = HashMap::new();
@@ -33,24 +49,18 @@ fn main() {
         .expect("No .ttf fonts found in assets/")
         .clone();
 
+    #[cfg(debug_assertions)]
     let bundle = std::fs::read_to_string("dist/bundle.js").expect("Run 'npm run build' first");
+    #[cfg(not(debug_assertions))]
+    let bundle = include_str!("../../../dist/bundle.js").to_string();
 
-    // Boot QuickJS engine
-    let engine = engine::Engine::new();
+    #[cfg(not(feature = "hotreload"))]
+    let engine = make_engine(&bundle);
+    #[cfg(feature = "hotreload")]
+    let mut engine = make_engine(&bundle);
 
-    // Register native functions
-    engine.with_context(|ctx| {
-        ctx.globals()
-            .set(
-                "nativeLog",
-                Func::from(|msg: String| {
-                    println!("[JS] {}", msg);
-                }),
-            )
-            .unwrap();
-    });
-
-    engine.boot(&bundle);
+    #[cfg(feature = "hotreload")]
+    let reload_rx = jsui_dev::spawn_reload_listener();
 
     // Initial tree read + layout + render
     let mut layout_tree = engine::read_and_layout(
@@ -102,6 +112,12 @@ fn main() {
         }
 
         engine.tick();
+
+        #[cfg(feature = "hotreload")]
+        if let Ok(new_bundle) = reload_rx.try_recv() {
+            println!("[dev] reloading bundle...");
+            engine = make_engine(&new_bundle);
+        }
 
         if engine.has_update() {
             layout_tree = engine::rerender(

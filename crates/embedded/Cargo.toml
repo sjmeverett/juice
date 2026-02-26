@@ -11,3 +11,7 @@ rquickjs = { version = "0.11", features = ["macro", "bindgen"] }
 drm = "0.14"
 evdev = "0.13"
 libc = "0.2"
+jsui-dev = { path = "../jsui-dev", optional = true }
+
+[features]
+hotreload = ["jsui-dev"]
