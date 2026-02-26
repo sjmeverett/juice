@@ -126,11 +126,23 @@ fn style_from_props(style: Option<&StyleProps>) -> Style {
     };
 
     let pad_all = s.padding.unwrap_or(0.0);
+    let pad_x = s.padding_x.unwrap_or(pad_all);
+    let pad_y = s.padding_y.unwrap_or(pad_all);
     let padding = Rect {
-        left: LengthPercentage::length(s.padding_left.unwrap_or(pad_all)),
-        right: LengthPercentage::length(s.padding_right.unwrap_or(pad_all)),
-        top: LengthPercentage::length(s.padding_top.unwrap_or(pad_all)),
-        bottom: LengthPercentage::length(s.padding_bottom.unwrap_or(pad_all)),
+        left: LengthPercentage::length(s.padding_left.unwrap_or(pad_x)),
+        right: LengthPercentage::length(s.padding_right.unwrap_or(pad_x)),
+        top: LengthPercentage::length(s.padding_top.unwrap_or(pad_y)),
+        bottom: LengthPercentage::length(s.padding_bottom.unwrap_or(pad_y)),
+    };
+
+    let mar_all = s.margin.unwrap_or(0.0);
+    let mar_x = s.margin_x.unwrap_or(mar_all);
+    let mar_y = s.margin_y.unwrap_or(mar_all);
+    let margin = Rect {
+        left: LengthPercentageAuto::length(s.margin_left.unwrap_or(mar_x)),
+        right: LengthPercentageAuto::length(s.margin_right.unwrap_or(mar_x)),
+        top: LengthPercentageAuto::length(s.margin_top.unwrap_or(mar_y)),
+        bottom: LengthPercentageAuto::length(s.margin_bottom.unwrap_or(mar_y)),
     };
 
     let gap_val = s.gap.unwrap_or(0.0);
@@ -149,6 +161,7 @@ fn style_from_props(style: Option<&StyleProps>) -> Style {
         flex_shrink: s.flex_shrink.unwrap_or(1.0),
         size: Size { width, height },
         padding,
+        margin,
         gap,
         ..Default::default()
     }

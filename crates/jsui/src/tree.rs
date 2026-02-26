@@ -39,7 +39,23 @@ pub struct StyleProps {
     pub width: Option<DimensionValue>,
     pub height: Option<DimensionValue>,
     #[serde(default, deserialize_with = "deserialize_opt_px")]
+    pub margin: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_opt_px")]
+    pub margin_bottom: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_opt_px")]
+    pub margin_left: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_opt_px")]
+    pub margin_right: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_opt_px")]
+    pub margin_top: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_opt_px")]
+    pub margin_x: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_opt_px")]
+    pub margin_y: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_opt_px")]
     pub padding: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_opt_px")]
+    pub padding_bottom: Option<f32>,
     #[serde(default, deserialize_with = "deserialize_opt_px")]
     pub padding_left: Option<f32>,
     #[serde(default, deserialize_with = "deserialize_opt_px")]
@@ -47,7 +63,9 @@ pub struct StyleProps {
     #[serde(default, deserialize_with = "deserialize_opt_px")]
     pub padding_top: Option<f32>,
     #[serde(default, deserialize_with = "deserialize_opt_px")]
-    pub padding_bottom: Option<f32>,
+    pub padding_x: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_opt_px")]
+    pub padding_y: Option<f32>,
     #[serde(default, deserialize_with = "deserialize_opt_px")]
     pub gap: Option<f32>,
 }

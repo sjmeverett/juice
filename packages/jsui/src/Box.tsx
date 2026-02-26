@@ -11,11 +11,20 @@ export interface BoxStyle {
 	fontSize?: number;
 	gap?: number;
 	height?: string | number;
+	margin?: number;
+	marginBottom?: number;
+	marginLeft?: number;
+	marginRight?: number;
+	marginTop?: number;
+	marginX?: number;
+	marginY?: number;
 	padding?: number;
 	paddingBottom?: number;
 	paddingLeft?: number;
 	paddingRight?: number;
 	paddingTop?: number;
+	paddingX?: number;
+	paddingY?: number;
 	width?: string | number;
 }
 
