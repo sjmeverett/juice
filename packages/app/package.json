@@ -2,6 +2,7 @@
   "name": "sample-app",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@jsui/core": "*",
     "preact": "^10.28.4"

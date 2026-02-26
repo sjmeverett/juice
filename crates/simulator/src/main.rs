@@ -1,7 +1,7 @@
 use embedded_graphics::pixelcolor::Rgb888;
 use embedded_graphics::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::MouseButton, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::MouseButton,
 };
 use fontdue::{Font, FontSettings};
 use jsui::{engine, layout, render};
@@ -43,11 +43,7 @@ fn main() {
         }
     }
 
-    let default_font = fonts
-        .keys()
-        .next()
-        .expect("No .ttf fonts found in assets/")
-        .clone();
+    let default_font = "Roboto-Regular";
 
     #[cfg(debug_assertions)]
     let bundle = std::fs::read_to_string("dist/bundle.js").expect("Run 'npm run build' first");
@@ -92,7 +88,10 @@ fn main() {
                     if let Some(js_node_id) =
                         layout::hit_test(&layout_tree, point.x as f32, point.y as f32)
                     {
-                        engine.dispatch_event(js_node_id, "PressIn");
+                        engine.dispatch_event(js_node_id, "PressIn", |_ctx, details| {
+                            details.set("x", point.x).unwrap();
+                            details.set("y", point.y).unwrap();
+                        });
                     }
                 }
 
@@ -103,7 +102,10 @@ fn main() {
                     if let Some(js_node_id) =
                         layout::hit_test(&layout_tree, point.x as f32, point.y as f32)
                     {
-                        engine.dispatch_event(js_node_id, "PressOut");
+                        engine.dispatch_event(js_node_id, "PressOut", |_ctx, details| {
+                            details.set("x", point.x).unwrap();
+                            details.set("y", point.y).unwrap();
+                        });
                     }
                 }
 
@@ -120,6 +122,7 @@ fn main() {
         }
 
         if engine.has_update() {
+            println!("has_update=true, re-rendering");
             layout_tree = engine::rerender(
                 &engine,
                 &default_font,

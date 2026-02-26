@@ -1,4 +1,5 @@
-import { boot } from "@jsui/core";
-import { App } from "./app";
+import { createRoot } from "@jsui/core";
+import { App } from "./app.js";
 
-boot(<App />);
+const root = createRoot();
+root.render(<App />);

@@ -95,22 +95,24 @@ fn main() {
         }
 
         if touch_state.pressed && !was_pressed {
-            if let Some(js_node_id) = layout::hit_test(
-                &layout_tree,
-                touch_state.x as f32,
-                touch_state.y as f32,
-            ) {
-                engine.dispatch_event(js_node_id, "PressIn");
+            if let Some(js_node_id) =
+                layout::hit_test(&layout_tree, touch_state.x as f32, touch_state.y as f32)
+            {
+                engine.dispatch_event(js_node_id, "PressIn", |_ctx, details| {
+                    details.set("x", touch_state.x).unwrap();
+                    details.set("y", touch_state.y).unwrap();
+                });
             }
         }
 
         if !touch_state.pressed && was_pressed {
-            if let Some(js_node_id) = layout::hit_test(
-                &layout_tree,
-                touch_state.x as f32,
-                touch_state.y as f32,
-            ) {
-                engine.dispatch_event(js_node_id, "PressOut");
+            if let Some(js_node_id) =
+                layout::hit_test(&layout_tree, touch_state.x as f32, touch_state.y as f32)
+            {
+                engine.dispatch_event(js_node_id, "PressOut", |_ctx, details| {
+                    details.set("x", touch_state.x).unwrap();
+                    details.set("y", touch_state.y).unwrap();
+                });
             }
         }
 

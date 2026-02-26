@@ -13,18 +13,13 @@ struct Timer {
     fire_at: Instant,
 }
 
-struct Listener {
-    event: String,
-    callback: Persistent<Function<'static>>,
-}
-
 pub struct Engine {
     _rt: Runtime,
     ctx: Context,
     tree_json: Rc<RefCell<String>>,
     dirty: Rc<RefCell<bool>>,
     timers: Rc<RefCell<Vec<Timer>>>,
-    listeners: Rc<RefCell<Vec<Listener>>>,
+    event_callback: Rc<RefCell<Option<Persistent<Function<'static>>>>>,
 }
 
 impl Engine {
@@ -35,7 +30,8 @@ impl Engine {
         let dirty = Rc::new(RefCell::new(false));
         let timers: Rc<RefCell<Vec<Timer>>> = Rc::new(RefCell::new(Vec::new()));
         let next_timer_id = Rc::new(RefCell::new(1u32));
-        let listeners: Rc<RefCell<Vec<Listener>>> = Rc::new(RefCell::new(Vec::new()));
+        let event_callback: Rc<RefCell<Option<Persistent<Function<'static>>>>> =
+            Rc::new(RefCell::new(None));
 
         ctx.with(|ctx| {
             // Register setTimeout
@@ -79,44 +75,23 @@ impl Engine {
             let doc = Object::new(ctx.clone()).unwrap();
             ctx.globals().set("document", doc.clone()).unwrap();
 
-            let listeners_cell = listeners.clone();
-            doc.set(
-                "addEventListener",
-                Func::from(MutFn::from(
-                    move |event: String, callback: Persistent<Function<'static>>| {
-                        listeners_cell
-                            .borrow_mut()
-                            .push(Listener { event, callback });
-                    },
-                )),
-            )
-            .unwrap();
-
-            let listeners_cell = listeners.clone();
-            doc.set(
-                "removeEventListener",
-                Func::from(MutFn::from(
-                    move |event: String, callback: Persistent<Function<'static>>| {
-                        listeners_cell
-                            .borrow_mut()
-                            .retain(|l| l.event != event || l.callback != callback);
-                    },
-                )),
-            )
-            .unwrap();
-
             // Register renderer global object
             let renderer = Object::new(ctx.clone()).unwrap();
 
             let tree_cell = tree_json.clone();
             let dirty_cell = dirty.clone();
+            let cb_cell = event_callback.clone();
+
             renderer
                 .set(
-                    "setContents",
-                    Func::from(MutFn::from(move |json: String| {
-                        *tree_cell.borrow_mut() = json;
-                        *dirty_cell.borrow_mut() = true;
-                    })),
+                    "update",
+                    Func::from(MutFn::from(
+                        move |json: String, callback: Persistent<Function<'static>>| {
+                            *tree_cell.borrow_mut() = json;
+                            *dirty_cell.borrow_mut() = true;
+                            *cb_cell.borrow_mut() = Some(callback);
+                        },
+                    )),
                 )
                 .unwrap();
 
@@ -129,7 +104,7 @@ impl Engine {
             tree_json,
             dirty,
             timers,
-            listeners,
+            event_callback,
         }
     }
 
@@ -146,28 +121,29 @@ impl Engine {
         });
     }
 
-    /// Dispatch a touch event. Fires all "event" listeners with (nodeId, eventType).
+    /// Dispatch a touch event by invoking the event callback registered via
+    /// `renderer.update(json, callback)`. Passes `(nodeId, event)` to the JS side.
     /// Also flushes any expired timers so Preact's batched re-renders complete
     /// before the caller reads the tree.
-    pub fn dispatch_event(&self, node_id: u32, event_type: &str) {
-        let callbacks: Vec<Persistent<Function<'static>>> = self
-            .listeners
-            .borrow()
-            .iter()
-            .filter(|l| l.event == "event")
-            .map(|l| l.callback.clone())
-            .collect();
+    pub fn dispatch_event(
+        &self,
+        node_id: u32,
+        event_type: &str,
+        build_details: impl FnOnce(&Ctx<'_>, &Object<'_>),
+    ) {
+        let callback = self.event_callback.borrow().clone();
 
-        if !callbacks.is_empty() {
+        if let Some(cb) = callback {
             self.ctx.with(|ctx| {
-                let event = Object::new(ctx.clone()).unwrap();
-                event.set("nodeId", node_id).unwrap();
-                event.set("type", event_type).unwrap();
+                let details = Object::new(ctx.clone()).unwrap();
+                build_details(&ctx, &details);
 
-                for cb in callbacks {
-                    let func = cb.restore(&ctx).unwrap();
-                    let _ = func.call::<_, ()>((event.clone(),)).catch(&ctx);
-                }
+                let event = Object::new(ctx.clone()).unwrap();
+                event.set("type", event_type).unwrap();
+                event.set("details", details).unwrap();
+
+                let func = cb.restore(&ctx).unwrap();
+                let _ = func.call::<_, ()>((node_id, event)).catch(&ctx);
                 while ctx.execute_pending_job() {}
             });
         }
@@ -218,7 +194,7 @@ impl Drop for Engine {
     fn drop(&mut self) {
         // Clear Persistent values before the Runtime drops, otherwise it aborts.
         self.timers.borrow_mut().clear();
-        self.listeners.borrow_mut().clear();
+        self.event_callback.borrow_mut().take();
     }
 }
 
@@ -241,7 +217,9 @@ pub fn rerender(
     default_font: &str,
     fonts: &HashMap<String, Font>,
     fb: &mut render::Framebuffer,
-    display: &mut impl embedded_graphics::draw_target::DrawTarget<Color = embedded_graphics::pixelcolor::Rgb888>,
+    display: &mut impl embedded_graphics::draw_target::DrawTarget<
+        Color = embedded_graphics::pixelcolor::Rgb888,
+    >,
     width: f32,
     height: f32,
 ) -> layout::LayoutTree {
