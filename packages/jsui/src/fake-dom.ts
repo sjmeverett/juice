@@ -84,15 +84,12 @@ export class NativeTextNode {
 	}
 }
 
-// Augment globalThis with our bridge functions
+// Augment globalThis with bridge types
 declare global {
-	var __refreshTree__: () => void;
-	var __dispatchEvent__: (nodeId: number, eventType: string) => void;
-	// Native objects/functions registered by Rust host
+	// Native objects registered by Rust host
 	var renderer: {
-		setTree(json: string): void;
+		setContents(json: string): void;
 	};
-	function nativeLog(message: string): void;
 }
 
 // Global "document" that Preact will use

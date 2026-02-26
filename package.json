@@ -1,22 +1,11 @@
 {
-  "name": "js",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "workspaces": ["packages/*"],
   "scripts": {
-    "build": "esbuild ts/index.tsx --bundle --format=iife --outfile=dist/bundle.js --jsx=automatic --jsx-import-source=preact",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "esbuild": "^0.27.3",
-    "preact": "^10.28.4"
+    "build": "esbuild packages/app/src/index.tsx --bundle --format=iife --outfile=dist/bundle.js --jsx=automatic --jsx-import-source=preact"
   },
   "devDependencies": {
-    "tsx": "^4.21.0",
+    "esbuild": "^0.27.3",
     "typescript": "^5.9.3"
   }
 }

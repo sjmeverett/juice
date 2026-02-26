@@ -125,6 +125,7 @@ fn main() {
         }
 
         was_pressed = touch_state.pressed;
+        engine.tick();
         std::thread::sleep(Duration::from_millis(16));
     }
 }

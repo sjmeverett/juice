@@ -1,10 +1,37 @@
 use crate::{layout, render, tree};
 use fontdue::Font;
 use rquickjs::function::{Func, MutFn};
-use rquickjs::{CatchResultExt, Context, Ctx, Object, Runtime};
+use rquickjs::{CatchResultExt, Context, Ctx, Function, Object, Runtime};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+
+const TIMER_SHIM: &str = r#"
+(() => {
+    const timers = new Map();
+    let nextId = 1;
+
+    globalThis.setTimeout = (fn, ms) => {
+        const id = nextId++;
+        timers.set(id, { fn, fire: Date.now() + (ms || 0) });
+        return id;
+    };
+
+    globalThis.clearTimeout = (id) => {
+        timers.delete(id);
+    };
+
+    globalThis.__tickTimers__ = () => {
+        const now = Date.now();
+        for (const [id, timer] of timers) {
+            if (timer.fire <= now) {
+                timers.delete(id);
+                timer.fn();
+            }
+        }
+    };
+})();
+"#;
 
 pub struct Engine {
     _rt: Runtime,
@@ -19,9 +46,7 @@ impl Engine {
         let tree_json = Rc::new(RefCell::new(String::new()));
 
         ctx.with(|ctx| {
-            ctx.eval::<(), _>("globalThis.setTimeout = (fn, ms) => { fn(); };")
-                .catch(&ctx)
-                .unwrap();
+            ctx.eval::<(), _>(TIMER_SHIM).catch(&ctx).unwrap();
 
             // Register renderer global object
             let renderer = Object::new(ctx.clone()).unwrap();
@@ -29,7 +54,7 @@ impl Engine {
             let tree_cell = tree_json.clone();
             renderer
                 .set(
-                    "setTree",
+                    "setContents",
                     Func::from(MutFn::from(move |json: String| {
                         *tree_cell.borrow_mut() = json;
                     })),
@@ -61,22 +86,23 @@ impl Engine {
 
     pub fn dispatch_event(&self, node_id: u32, event_type: &str) {
         self.ctx.with(|ctx| {
-            let script = format!(
-                "globalThis.__dispatchEvent__({}, '{}');",
-                node_id, event_type
-            );
-            ctx.eval::<(), _>(script.as_str()).catch(&ctx).unwrap();
+            let doc: Object = ctx.globals().get("document").unwrap();
+            let on_event: Function = doc.get("onEvent").unwrap();
+            on_event
+                .call::<_, ()>((node_id, event_type))
+                .catch(&ctx)
+                .unwrap();
 
             // Flush microtasks (Preact schedules re-renders via promises)
             while ctx.execute_pending_job() {}
         });
     }
 
-    pub fn refresh_tree(&self) {
+    /// Run any timers that have expired. Call once per frame from your event loop.
+    pub fn tick(&self) {
         self.ctx.with(|ctx| {
-            ctx.eval::<(), _>("globalThis.__refreshTree__();")
-                .catch(&ctx)
-                .unwrap();
+            ctx.eval::<(), _>("__tickTimers__()").catch(&ctx).unwrap();
+            while ctx.execute_pending_job() {}
         });
     }
 
@@ -108,7 +134,6 @@ pub fn rerender(
     width: f32,
     height: f32,
 ) -> layout::LayoutTree {
-    engine.refresh_tree();
     let layout_tree = read_and_layout(engine, default_font, fonts, width, height);
 
     fb.clear(layout::RgbColor { r: 0, g: 0, b: 0 });
