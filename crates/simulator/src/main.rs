@@ -83,15 +83,6 @@ fn main() {
                         layout::hit_test(&layout_tree, point.x as f32, point.y as f32)
                     {
                         engine.dispatch_event(js_node_id, "PressIn");
-                        layout_tree = engine::rerender(
-                            &engine,
-                            &default_font,
-                            &fonts,
-                            &mut fb,
-                            &mut display,
-                            DISPLAY_WIDTH as f32,
-                            DISPLAY_HEIGHT as f32,
-                        );
                     }
                 }
 
@@ -103,15 +94,6 @@ fn main() {
                         layout::hit_test(&layout_tree, point.x as f32, point.y as f32)
                     {
                         engine.dispatch_event(js_node_id, "PressOut");
-                        layout_tree = engine::rerender(
-                            &engine,
-                            &default_font,
-                            &fonts,
-                            &mut fb,
-                            &mut display,
-                            DISPLAY_WIDTH as f32,
-                            DISPLAY_HEIGHT as f32,
-                        );
                     }
                 }
 
@@ -120,5 +102,17 @@ fn main() {
         }
 
         engine.tick();
+
+        if engine.has_update() {
+            layout_tree = engine::rerender(
+                &engine,
+                &default_font,
+                &fonts,
+                &mut fb,
+                &mut display,
+                DISPLAY_WIDTH as f32,
+                DISPLAY_HEIGHT as f32,
+            );
+        }
     }
 }

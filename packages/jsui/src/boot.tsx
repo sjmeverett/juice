@@ -1,5 +1,5 @@
 import "./fake-dom";
-import { type ComponentChild, render } from "preact";
+import { type ComponentChild, options, render } from "preact";
 import { type NativeNode, NativeTextNode } from "./fake-dom";
 
 type FakeNode = NativeNode | NativeTextNode;
@@ -47,16 +47,24 @@ export function boot(app: ComponentChild) {
 	function flushTree() {
 		nodeRegistry = new Map();
 		nextNodeId = 0;
-		renderer.setTree(JSON.stringify(serialize(container)));
+		renderer.setContents(JSON.stringify(serialize(container)));
 	}
 
-	(document as any).onEvent = (nodeId: number, eventType: string) => {
-		const node = nodeRegistry.get(nodeId);
+	// Make Preact re-render synchronously instead of batching via setTimeout.
+	// In an embedded environment there's no benefit to deferring renders.
+	options.debounceRendering = (cb) => cb();
+
+	const doc = document as unknown as {
+		addEventListener(event: string, callback: (...args: any[]) => void): void;
+	};
+
+	doc.addEventListener("event", (event: { nodeId: number; type: string }) => {
+		const node = nodeRegistry.get(event.nodeId);
 		if (node) {
-			node.dispatchEvent({ type: eventType } as Event);
+			node.dispatchEvent({ type: event.type } as Event);
 		}
 		flushTree();
-	};
+	});
 
 	flushTree();
 }

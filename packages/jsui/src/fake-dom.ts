@@ -92,15 +92,8 @@ declare global {
 	};
 }
 
-// Global "document" that Preact will use
-(globalThis as any).document = {
-	createElement(tag: string) {
-		return new NativeNode(tag);
-	},
-	createElementNS(_ns: string, tag: string) {
-		return new NativeNode(tag);
-	},
-	createTextNode(text: string) {
-		return new NativeTextNode(text);
-	},
-};
+// Extend the document object created by the Rust host
+const doc = (globalThis as any).document;
+doc.createElement = (tag: string) => new NativeNode(tag);
+doc.createElementNS = (_ns: string, tag: string) => new NativeNode(tag);
+doc.createTextNode = (text: string) => new NativeTextNode(text);

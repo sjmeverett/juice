@@ -1,42 +1,30 @@
 use crate::{layout, render, tree};
 use fontdue::Font;
 use rquickjs::function::{Func, MutFn};
-use rquickjs::{CatchResultExt, Context, Ctx, Function, Object, Runtime};
+use rquickjs::{CatchResultExt, Context, Ctx, Function, Object, Persistent, Runtime};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
-const TIMER_SHIM: &str = r#"
-(() => {
-    const timers = new Map();
-    let nextId = 1;
+struct Timer {
+    id: u32,
+    callback: Persistent<Function<'static>>,
+    fire_at: Instant,
+}
 
-    globalThis.setTimeout = (fn, ms) => {
-        const id = nextId++;
-        timers.set(id, { fn, fire: Date.now() + (ms || 0) });
-        return id;
-    };
-
-    globalThis.clearTimeout = (id) => {
-        timers.delete(id);
-    };
-
-    globalThis.__tickTimers__ = () => {
-        const now = Date.now();
-        for (const [id, timer] of timers) {
-            if (timer.fire <= now) {
-                timers.delete(id);
-                timer.fn();
-            }
-        }
-    };
-})();
-"#;
+struct Listener {
+    event: String,
+    callback: Persistent<Function<'static>>,
+}
 
 pub struct Engine {
     _rt: Runtime,
     ctx: Context,
     tree_json: Rc<RefCell<String>>,
+    dirty: Rc<RefCell<bool>>,
+    timers: Rc<RefCell<Vec<Timer>>>,
+    listeners: Rc<RefCell<Vec<Listener>>>,
 }
 
 impl Engine {
@@ -44,19 +32,90 @@ impl Engine {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         let tree_json = Rc::new(RefCell::new(String::new()));
+        let dirty = Rc::new(RefCell::new(false));
+        let timers: Rc<RefCell<Vec<Timer>>> = Rc::new(RefCell::new(Vec::new()));
+        let next_timer_id = Rc::new(RefCell::new(1u32));
+        let listeners: Rc<RefCell<Vec<Listener>>> = Rc::new(RefCell::new(Vec::new()));
 
         ctx.with(|ctx| {
-            ctx.eval::<(), _>(TIMER_SHIM).catch(&ctx).unwrap();
+            // Register setTimeout
+            let timers_cell = timers.clone();
+            let id_cell = next_timer_id.clone();
+            ctx.globals()
+                .set(
+                    "setTimeout",
+                    Func::from(MutFn::from(
+                        move |callback: Persistent<Function<'static>>, ms: Option<f64>| -> u32 {
+                            let id = {
+                                let mut id_ref = id_cell.borrow_mut();
+                                let id = *id_ref;
+                                *id_ref += 1;
+                                id
+                            };
+                            let delay_ms = ms.unwrap_or(0.0).max(0.0) as u64;
+                            timers_cell.borrow_mut().push(Timer {
+                                id,
+                                callback,
+                                fire_at: Instant::now() + Duration::from_millis(delay_ms),
+                            });
+                            id
+                        },
+                    )),
+                )
+                .unwrap();
+
+            // Register clearTimeout
+            let timers_cell = timers.clone();
+            ctx.globals()
+                .set(
+                    "clearTimeout",
+                    Func::from(MutFn::from(move |id: u32| {
+                        timers_cell.borrow_mut().retain(|t| t.id != id);
+                    })),
+                )
+                .unwrap();
+
+            // Create document object (JS fake-dom will add createElement etc. to it)
+            let doc = Object::new(ctx.clone()).unwrap();
+            ctx.globals().set("document", doc.clone()).unwrap();
+
+            let listeners_cell = listeners.clone();
+            doc.set(
+                "addEventListener",
+                Func::from(MutFn::from(
+                    move |event: String, callback: Persistent<Function<'static>>| {
+                        listeners_cell
+                            .borrow_mut()
+                            .push(Listener { event, callback });
+                    },
+                )),
+            )
+            .unwrap();
+
+            let listeners_cell = listeners.clone();
+            doc.set(
+                "removeEventListener",
+                Func::from(MutFn::from(
+                    move |event: String, callback: Persistent<Function<'static>>| {
+                        listeners_cell
+                            .borrow_mut()
+                            .retain(|l| l.event != event || l.callback != callback);
+                    },
+                )),
+            )
+            .unwrap();
 
             // Register renderer global object
             let renderer = Object::new(ctx.clone()).unwrap();
 
             let tree_cell = tree_json.clone();
+            let dirty_cell = dirty.clone();
             renderer
                 .set(
                     "setContents",
                     Func::from(MutFn::from(move |json: String| {
                         *tree_cell.borrow_mut() = json;
+                        *dirty_cell.borrow_mut() = true;
                     })),
                 )
                 .unwrap();
@@ -68,6 +127,9 @@ impl Engine {
             _rt: rt,
             ctx,
             tree_json,
+            dirty,
+            timers,
+            listeners,
         }
     }
 
@@ -84,30 +146,79 @@ impl Engine {
         });
     }
 
+    /// Dispatch a touch event. Fires all "event" listeners with (nodeId, eventType).
+    /// Also flushes any expired timers so Preact's batched re-renders complete
+    /// before the caller reads the tree.
     pub fn dispatch_event(&self, node_id: u32, event_type: &str) {
-        self.ctx.with(|ctx| {
-            let doc: Object = ctx.globals().get("document").unwrap();
-            let on_event: Function = doc.get("onEvent").unwrap();
-            on_event
-                .call::<_, ()>((node_id, event_type))
-                .catch(&ctx)
-                .unwrap();
+        let callbacks: Vec<Persistent<Function<'static>>> = self
+            .listeners
+            .borrow()
+            .iter()
+            .filter(|l| l.event == "event")
+            .map(|l| l.callback.clone())
+            .collect();
 
-            // Flush microtasks (Preact schedules re-renders via promises)
-            while ctx.execute_pending_job() {}
-        });
+        if !callbacks.is_empty() {
+            self.ctx.with(|ctx| {
+                let event = Object::new(ctx.clone()).unwrap();
+                event.set("nodeId", node_id).unwrap();
+                event.set("type", event_type).unwrap();
+
+                for cb in callbacks {
+                    let func = cb.restore(&ctx).unwrap();
+                    let _ = func.call::<_, ()>((event.clone(),)).catch(&ctx);
+                }
+                while ctx.execute_pending_job() {}
+            });
+        }
+
+        // Flush any zero-delay timers (e.g. Preact's batched setState)
+        self.tick();
     }
 
     /// Run any timers that have expired. Call once per frame from your event loop.
     pub fn tick(&self) {
-        self.ctx.with(|ctx| {
-            ctx.eval::<(), _>("__tickTimers__()").catch(&ctx).unwrap();
-            while ctx.execute_pending_job() {}
-        });
+        let now = Instant::now();
+        let ready: Vec<Persistent<Function<'static>>> = {
+            let mut timers = self.timers.borrow_mut();
+            let mut ready = Vec::new();
+            timers.retain(|t| {
+                if t.fire_at <= now {
+                    ready.push(t.callback.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+            ready
+        };
+
+        if !ready.is_empty() {
+            self.ctx.with(|ctx| {
+                for cb in ready {
+                    let func = cb.restore(&ctx).unwrap();
+                    let _ = func.call::<_, ()>(()).catch(&ctx);
+                }
+                while ctx.execute_pending_job() {}
+            });
+        }
+    }
+
+    /// Returns true if `renderer.setContents` has been called since the last check.
+    pub fn has_update(&self) -> bool {
+        self.dirty.replace(false)
     }
 
     pub fn read_tree(&self) -> String {
         self.tree_json.borrow().clone()
+    }
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        // Clear Persistent values before the Runtime drops, otherwise it aborts.
+        self.timers.borrow_mut().clear();
+        self.listeners.borrow_mut().clear();
     }
 }
 

@@ -85,47 +85,40 @@ fn main() {
         }
 
         if touch_state.pressed && !was_pressed {
-            // Press down
             if let Some(js_node_id) = layout::hit_test(
                 &layout_tree,
                 touch_state.x as f32,
                 touch_state.y as f32,
             ) {
                 engine.dispatch_event(js_node_id, "PressIn");
-                layout_tree = engine::rerender(
-                    &engine,
-                    &default_font,
-                    &fonts,
-                    &mut fb,
-                    &mut display,
-                    display_width as f32,
-                    display_height as f32,
-                );
             }
         }
 
         if !touch_state.pressed && was_pressed {
-            // Release
             if let Some(js_node_id) = layout::hit_test(
                 &layout_tree,
                 touch_state.x as f32,
                 touch_state.y as f32,
             ) {
                 engine.dispatch_event(js_node_id, "PressOut");
-                layout_tree = engine::rerender(
-                    &engine,
-                    &default_font,
-                    &fonts,
-                    &mut fb,
-                    &mut display,
-                    display_width as f32,
-                    display_height as f32,
-                );
             }
         }
 
         was_pressed = touch_state.pressed;
         engine.tick();
+
+        if engine.has_update() {
+            layout_tree = engine::rerender(
+                &engine,
+                &default_font,
+                &fonts,
+                &mut fb,
+                &mut display,
+                display_width as f32,
+                display_height as f32,
+            );
+        }
+
         std::thread::sleep(Duration::from_millis(16));
     }
 }
