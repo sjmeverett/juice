@@ -4,7 +4,7 @@ use taffy::prelude::*;
 
 #[derive(Debug, Clone)]
 pub enum NodeContext {
-    Container { background: Option<RgbColor>, node_id: Option<u32> },
+    Container { background: Option<RgbColor>, border_radius: f32, node_id: Option<u32> },
     Text { content: String, color: RgbColor, font_name: String, font_size: f32 },
 }
 
@@ -77,10 +77,14 @@ fn build_node(
         WidgetNode::Element { props, children, .. } => {
             let mut child_inherited = inherited.clone();
             let mut background = None;
+            let mut border_radius = 0.0;
 
             if let Some(style) = &props.style {
                 if let Some(bg) = &style.background {
                     background = Some(RgbColor::from_hex(bg));
+                }
+                if let Some(br) = style.border_radius {
+                    border_radius = br;
                 }
                 if let Some(color) = &style.color {
                     child_inherited.color = RgbColor::from_hex(color);
@@ -101,7 +105,7 @@ fn build_node(
             let taffy_style = style_from_props(props.style.as_ref());
             let node_id = taffy.new_with_children(taffy_style, &child_ids).unwrap();
             taffy
-                .set_node_context(node_id, Some(NodeContext::Container { background, node_id: props.id }))
+                .set_node_context(node_id, Some(NodeContext::Container { background, border_radius, node_id: props.id }))
                 .unwrap();
             node_id
         }

@@ -2,6 +2,7 @@ import type { UIElementProps } from "./dom.js";
 
 export interface BoxStyle {
 	background?: string;
+	borderRadius?: number;
 	color?: string;
 	flexDirection?: "row" | "column";
 	flexGrow?: number;

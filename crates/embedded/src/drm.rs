@@ -3,6 +3,7 @@ use drm::control::{connector, crtc, dumbbuffer, framebuffer, Device as ControlDe
 use drm::Device;
 use embedded_graphics::pixelcolor::Rgb888;
 use embedded_graphics::prelude::*;
+use jsui::render;
 use std::fs::{File, OpenOptions};
 use std::os::unix::io::{AsFd, BorrowedFd};
 
@@ -146,6 +147,27 @@ impl DrmDisplay {
 
     fn framebuffer_mut(&mut self) -> &mut [u8] {
         unsafe { std::slice::from_raw_parts_mut(self.buffer_ptr, self.buffer_size) }
+    }
+
+    /// Blit the framebuffer into the DRM display buffer.
+    /// Both are XRGB8888, so this is a row-by-row memcpy.
+    pub fn blit_from(&mut self, fb: &render::Framebuffer) {
+        let src = fb.as_xrgb_bytes();
+        let pitch = self.pitch as usize;
+        let row_bytes = fb.width as usize * 4;
+        let dst = self.framebuffer_mut();
+
+        // If pitch matches width (no padding), single memcpy for the whole buffer
+        if pitch == row_bytes {
+            dst[..src.len()].copy_from_slice(src);
+        } else {
+            for y in 0..fb.height as usize {
+                let src_start = y * row_bytes;
+                let dst_start = y * pitch;
+                dst[dst_start..dst_start + row_bytes]
+                    .copy_from_slice(&src[src_start..src_start + row_bytes]);
+            }
+        }
     }
 }
 

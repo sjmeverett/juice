@@ -30,6 +30,7 @@ export function App() {
 					fontSize: 36,
 					background: "#ff8000",
 					color: "#000000",
+					borderRadius: 5,
 				}}
 			>
 				Increment

@@ -128,10 +128,10 @@ fn main() {
                 &default_font,
                 &fonts,
                 &mut fb,
-                &mut display,
                 DISPLAY_WIDTH as f32,
                 DISPLAY_HEIGHT as f32,
             );
+            fb.flush(&mut display);
         }
     }
 }

@@ -217,9 +217,6 @@ pub fn rerender(
     default_font: &str,
     fonts: &HashMap<String, Font>,
     fb: &mut render::Framebuffer,
-    display: &mut impl embedded_graphics::draw_target::DrawTarget<
-        Color = embedded_graphics::pixelcolor::Rgb888,
-    >,
     width: f32,
     height: f32,
 ) -> layout::LayoutTree {
@@ -227,7 +224,6 @@ pub fn rerender(
 
     fb.clear(layout::RgbColor { r: 0, g: 0, b: 0 });
     render::render_tree(fb, &layout_tree, fonts);
-    fb.flush(display);
 
     layout_tree
 }

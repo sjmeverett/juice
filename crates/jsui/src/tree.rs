@@ -24,6 +24,8 @@ pub struct Props {
 pub struct StyleProps {
     // Visual
     pub background: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_px")]
+    pub border_radius: Option<f32>,
     pub color: Option<String>,
     pub font: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_px")]

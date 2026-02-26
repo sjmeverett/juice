@@ -77,7 +77,7 @@ fn main() {
 
     let mut fb = render::Framebuffer::new(display_width, display_height);
     render::render_tree(&mut fb, &layout_tree, &fonts);
-    fb.flush(&mut display);
+    display.blit_from(&fb);
 
     // Touch input
     let mut touch_device = input::find_touch_device();
@@ -131,10 +131,10 @@ fn main() {
                 &default_font,
                 &fonts,
                 &mut fb,
-                &mut display,
                 display_width as f32,
                 display_height as f32,
             );
+            display.blit_from(&fb);
         }
 
         std::thread::sleep(Duration::from_millis(16));
