@@ -294,6 +294,34 @@ fn render_node(
             }
         }
 
+        Some(NodeContext::Image {
+            data,
+            img_width,
+            img_height,
+            ..
+        }) => {
+            let render_w = w as u32;
+            let render_h = h as u32;
+
+            if !data.is_empty() && *img_width > 0 && *img_height > 0 && render_w > 0 && render_h > 0
+            {
+                // If dimensions match, blit directly; otherwise resize
+                if *img_width == render_w && *img_height == render_h {
+                    canvas.blit_rgba(data, *img_width, *img_height, x as i32, y as i32);
+                } else if let Some(src_img) =
+                    image::RgbaImage::from_raw(*img_width, *img_height, data.clone())
+                {
+                    let resized = image::imageops::resize(
+                        &src_img,
+                        render_w,
+                        render_h,
+                        image::imageops::FilterType::Triangle,
+                    );
+                    canvas.blit_rgba(resized.as_raw(), render_w, render_h, x as i32, y as i32);
+                }
+            }
+        }
+
         _ => {}
     }
 

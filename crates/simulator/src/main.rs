@@ -12,8 +12,8 @@ use juice::{
 use rquickjs::{Object, function::Func};
 use std::collections::HashMap;
 
-const DISPLAY_WIDTH: u32 = 480;
-const DISPLAY_HEIGHT: u32 = 320;
+const DISPLAY_WIDTH: u32 = 800;
+const DISPLAY_HEIGHT: u32 = 800;
 
 fn main() {
     // Load all fonts from assets directory

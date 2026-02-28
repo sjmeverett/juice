@@ -128,6 +128,9 @@ impl Dom {
             Some(NodeContext::Svg {
                 js_id: Some(js_id), ..
             }) => Some(*js_id),
+            Some(NodeContext::Image {
+                js_id: Some(js_id), ..
+            }) => Some(*js_id),
             _ => None,
         }
     }
@@ -161,6 +164,49 @@ fn build_node(
                 markup: markup.clone(),
                 js_id: *id,
                 inherited_color: inherited_style.color,
+            };
+
+            let style = Style {
+                size: Size {
+                    width: parse_dimension(width, inherited_style.font_size),
+                    height: parse_dimension(height, inherited_style.font_size),
+                },
+                ..Default::default()
+            };
+
+            tree.new_leaf_with_context(style, context).unwrap()
+        }
+
+        Node::Image {
+            id,
+            src,
+            width,
+            height,
+        } => {
+            // Decode base64 data URL: "data:image/png;base64,..."
+            let (data, img_width, img_height) = if let Some(base64_data) =
+                src.split(',').nth(1).and_then(|s| {
+                    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s).ok()
+                }) {
+                match image::load_from_memory(&base64_data) {
+                    Ok(img) => {
+                        let rgba = img.to_rgba8();
+                        (rgba.to_vec(), rgba.width(), rgba.height())
+                    }
+                    Err(err) => {
+                        println!("Error loading image: {:?}", err);
+                        (vec![], 0, 0)
+                    }
+                }
+            } else {
+                (vec![], 0, 0)
+            };
+
+            let context = NodeContext::Image {
+                data,
+                img_width,
+                img_height,
+                js_id: *id,
             };
 
             let style = Style {
@@ -345,6 +391,17 @@ pub enum Node {
         #[serde(default)]
         height: String,
     },
+    #[serde(rename = "image")]
+    Image {
+        #[serde(default)]
+        id: Option<u32>,
+        #[serde(default)]
+        src: String,
+        #[serde(default)]
+        width: String,
+        #[serde(default)]
+        height: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -364,5 +421,11 @@ pub enum NodeContext {
         markup: String,
         js_id: Option<u32>,
         inherited_color: RgbColor,
+    },
+    Image {
+        data: Vec<u8>,
+        img_width: u32,
+        img_height: u32,
+        js_id: Option<u32>,
     },
 }

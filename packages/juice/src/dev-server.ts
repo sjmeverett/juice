@@ -18,6 +18,13 @@ export async function startDevServer({ entryPoint, port }: DevServerOptions) {
 		write: false,
 		jsx: "automatic",
 		jsxImportSource: "preact",
+		loader: {
+			".png": "dataurl",
+			".jpg": "dataurl",
+			".jpeg": "dataurl",
+			".gif": "dataurl",
+			".webp": "dataurl",
+		},
 		plugins: [
 			{
 				name: "hot-reload",

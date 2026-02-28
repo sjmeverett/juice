@@ -11,3 +11,5 @@ taffy = "0.9"
 fontdue = "0.9"
 embedded-graphics = "0.8"
 resvg = { version = "0.45", default-features = false }
+image = { version = "0.24", default-features = false, features = ["png", "jpeg", "webp"] }
+base64 = "0.22"

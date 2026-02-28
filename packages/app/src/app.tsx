@@ -3,6 +3,7 @@ import { Box } from "@juice/core";
 import { useState } from "preact/hooks";
 import Button from "./Button.js";
 import Icon from "./Icon.js";
+import testImg from "./testimg.png";
 
 export function App() {
   const [count, setCount] = useState(0);
@@ -40,6 +41,10 @@ export function App() {
         <Icon icon={circleImageIcon} size="1.2em" />
         Increment
       </Button>
+
+      <Box style={{ marginTop: 50, padding: 30 }}>
+        <img src={testImg} width={100} height={100} />
+      </Box>
     </Box>
   );
 }

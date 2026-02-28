@@ -1,5 +1,6 @@
 import { UIElement } from "./UIElement.js";
 import { PressEvent } from "./UIEvent.js";
+import { UIImageElement } from "./UIImageElement.js";
 import type { UINode } from "./UINode.js";
 import { UISvgElement } from "./UISvgElement.js";
 import { UITextNode } from "./UITextNode.js";
@@ -30,12 +31,14 @@ export class UIDocument extends UIElement {
 	}
 
 	createElement(tagName: string): UIElement {
-		return new UIElement(tagName);
+		return this.createElementNS(UIElement.namespace, tagName)
 	}
 
 	createElementNS(namespaceURI: string, tagName: string): UIElement {
 		if (namespaceURI === UISvgElement.namespace) {
 			return new UISvgElement(tagName);
+		} else if (tagName === "img") {
+			return new UIImageElement();
 		}
 		return new UIElement(tagName, namespaceURI);
 	}
