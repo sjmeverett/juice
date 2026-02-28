@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "bin": {
+    "jsui": "./src/cli.ts"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -13,10 +16,12 @@
     }
   },
   "dependencies": {
-    "events": "^3.3.0",
-    "preact": "^10.28.4"
+    "esbuild": "^0.27.3",
+    "preact": "^10.28.4",
+    "tsx": "^4",
+    "ws": "^8"
   },
   "devDependencies": {
-    "@types/events": "^3.0.3"
+    "@types/ws": "^8"
   }
 }
