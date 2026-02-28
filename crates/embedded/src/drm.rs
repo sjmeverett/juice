@@ -1,9 +1,9 @@
-use drm::buffer::Buffer;
-use drm::control::{connector, crtc, dumbbuffer, framebuffer, Device as ControlDevice, Mode};
 use drm::Device;
+use drm::buffer::Buffer;
+use drm::control::{Device as ControlDevice, Mode, connector, crtc, dumbbuffer, framebuffer};
 use embedded_graphics::pixelcolor::Rgb888;
 use embedded_graphics::prelude::*;
-use jsui::render;
+use jsui::canvas::Canvas;
 use std::fs::{File, OpenOptions};
 use std::os::unix::io::{AsFd, BorrowedFd};
 
@@ -111,9 +111,7 @@ impl DrmDisplay {
         let buffer_ptr = map.as_mut_ptr();
 
         // Set CRTC
-        if let Err(e) =
-            drm.set_crtc(crtc, Some(fb), (0, 0), &[connector_handle], Some(mode))
-        {
+        if let Err(e) = drm.set_crtc(crtc, Some(fb), (0, 0), &[connector_handle], Some(mode)) {
             println!("Warning: Failed to set CRTC: {}", e);
         } else {
             println!("Successfully set CRTC - display active");
@@ -151,17 +149,17 @@ impl DrmDisplay {
 
     /// Blit the framebuffer into the DRM display buffer.
     /// Both are XRGB8888, so this is a row-by-row memcpy.
-    pub fn blit_from(&mut self, fb: &render::Framebuffer) {
-        let src = fb.as_xrgb_bytes();
+    pub fn blit_from(&mut self, canvas: &Canvas) {
+        let src = canvas.as_xrgb_bytes();
         let pitch = self.pitch as usize;
-        let row_bytes = fb.width as usize * 4;
+        let row_bytes = canvas.width as usize * 4;
         let dst = self.framebuffer_mut();
 
         // If pitch matches width (no padding), single memcpy for the whole buffer
         if pitch == row_bytes {
             dst[..src.len()].copy_from_slice(src);
         } else {
-            for y in 0..fb.height as usize {
+            for y in 0..canvas.height as usize {
                 let src_start = y * row_bytes;
                 let dst_start = y * pitch;
                 dst[dst_start..dst_start + row_bytes]

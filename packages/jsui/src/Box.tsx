@@ -1,12 +1,15 @@
-import type { UIElementProps } from "./dom.js";
+import type { UIElementProps } from "./UIElement.js";
 
 export interface BoxStyle {
+	alignItems?: "stretch" | "flex-start" | "center" | "flex-end";
+	alignSelf?: "stretch" | "flex-start" | "center" | "flex-end";
 	background?: string;
 	borderRadius?: number;
 	color?: string;
 	flexDirection?: "row" | "column";
 	flexGrow?: number;
 	flexShrink?: number;
+	flexBasis?: number;
 	font?: string;
 	fontSize?: number;
 	gap?: number;

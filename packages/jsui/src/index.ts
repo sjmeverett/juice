@@ -1,3 +1,3 @@
 export * from "./Box.js";
-export * from "./dom.js";
-export { createRoot } from "./render.js";
+export { render } from "./render.js";
+export { UIElementProps } from "./UIElement.js";

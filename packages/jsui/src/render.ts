@@ -1,74 +1,35 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: we're using well-documented preact internals */
 import {
 	type ComponentChild,
 	type ContainerNode,
 	options,
-	render,
+	render as preactRender,
 } from "preact";
-import { PressEvent, UIElement, type UINode, UITextNode } from "./dom.js";
+import { document } from "./UIDocument.js";
+import { PressEvent } from "./UIEvent.js";
+import "preact/hooks";
 
-interface SerializedText {
-	type: "#text";
-	text: string;
+export type RendererEventCallback = (
+	nodeId: number,
+	event: { type: string; details: Record<string, unknown> },
+) => void;
+
+export interface UIRenderer {
+	update(contents: string, eventCallback: RendererEventCallback): void;
 }
 
-interface SerializedElement {
-	type: string;
-	props: Record<string, unknown>;
-	children: SerializedNode[];
+declare global {
+	const renderer: UIRenderer;
 }
 
-type SerializedNode = SerializedText | SerializedElement;
-
-export function createRoot(): Root {
-	// make preact render synchronously
+export function render(app: ComponentChild) {
 	options.debounceRendering = (cb) => cb();
-	return new Root();
-}
 
-export class Root {
-	private readonly container: UIElement;
-
-	constructor() {
-		this.container = new UIElement("root");
-		this.wireUpDerivedEvents(this.container);
-	}
-
-	render(app: ComponentChild) {
-		render(app, this.container as unknown as ContainerNode);
-		this.update();
-	}
-
-	serialize(node: UINode, allNodes: UINode[]): SerializedNode {
-		if (node instanceof UITextNode) {
-			return { type: "#text", text: node.textContent };
-		} else if (node instanceof UIElement) {
-			node.id = allNodes.length;
-			allNodes.push(node);
-
-			const props: Record<string, unknown> = { ...node.props, id: node.id };
-			if (Object.keys(node.style).length > 0) {
-				props.style = node.style;
-			}
-
-			return {
-				type: node.tagName,
-				props,
-				children: node.childNodes.map((child) =>
-					this.serialize(child, allNodes),
-				),
-			};
-		} else {
-			throw new Error(`Unsupported node type: ${node.constructor.name}`);
-		}
-	}
-
-	update() {
-		const nodes: UINode[] = [];
-		const contents = JSON.stringify(this.serialize(this.container, nodes));
+	const update = () => {
+		const contents = JSON.stringify(document.firstChild);
 
 		renderer.update(contents, (nodeId, event) => {
-			nativeLog(`Node ${nodeId} received event ${event.type}`);
-			const node = nodes[nodeId];
+			const node = document.findElementByNodeId(nodeId);
 
 			if (node) {
 				node.dispatchEvent(
@@ -79,30 +40,16 @@ export class Root {
 					),
 				);
 			}
-
-			this.update();
 		});
-	}
+	};
 
-	private wireUpDerivedEvents(root: UIElement) {
-		let pressedNode: UINode | undefined;
+	const commit = (options as any).__c;
 
-		root.addEventListener("PressIn", (event) => {
-			pressedNode = event.target;
-		});
+	(options as any).__c = (vnode: any, commitQueue: any) => {
+		commit?.(vnode, commitQueue);
+		update();
+	};
 
-		root.addEventListener("PressOut", (event) => {
-			if (pressedNode?.contains(event.target)) {
-				pressedNode.dispatchEvent(
-					new PressEvent(
-						"Press",
-						pressedNode,
-						event.details as { x: number; y: number },
-					),
-				);
-			}
-
-			pressedNode = undefined;
-		});
-	}
+	preactRender(app, document as unknown as ContainerNode);
+	update();
 }

@@ -9,7 +9,4 @@ embedded-graphics = "0.8"
 embedded-graphics-simulator = "0.8"
 fontdue = "0.9"
 rquickjs = { version = "0.11", features = ["macro", "bindgen"] }
-jsui-dev = { path = "../jsui-dev", optional = true }
-
-[features]
-hotreload = ["jsui-dev"]
+jsui-dev = { path = "../jsui-dev" }

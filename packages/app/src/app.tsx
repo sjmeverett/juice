@@ -1,10 +1,19 @@
-declare function nativeLog(message: string): void;
-
 import { Box } from "@jsui/core";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
+import Button from "./Button.js";
 
 export function App() {
 	const [count, setCount] = useState(0);
+
+	useEffect(() => {
+		console.log("useEffect called");
+		const handle = setInterval(() => {
+			setCount((count) => count + 1);
+		}, 1000);
+
+		return () => clearInterval(handle);
+	}, []);
+
 	return (
 		<Box
 			style={{
@@ -17,25 +26,26 @@ export function App() {
 			}}
 		>
 			<Box style={{ color: "#ffffff", font: "Roboto-Bold", fontSize: 72 }}>
-				Hello, World!
+				Hello, World
 			</Box>
 			<Box>Count: {count}</Box>
-			<Box
+			<Button
 				onPress={() => {
 					setCount(count + 1);
-					nativeLog(`Counter incremented to ${count + 1}`);
+					console.log(`Counter incremented to ${count + 1}`);
 				}}
+				buttonColor={["#ff8000", "#ff4000"]}
 				style={{
 					padding: 20,
 					fontSize: 36,
-					background: "#ff8000",
 					color: "#000000",
 					borderRadius: 5,
-					marginTop: 22,
+					marginTop: 50,
+					alignSelf: "flex-start",
 				}}
 			>
 				Increment
-			</Box>
+			</Button>
 		</Box>
 	);
 }

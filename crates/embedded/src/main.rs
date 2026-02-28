@@ -2,31 +2,21 @@ mod drm;
 mod input;
 
 use fontdue::{Font, FontSettings};
-use jsui::{engine, layout, render};
+use jsui::canvas::{Canvas, RgbColor};
+use jsui::inherited_style::InheritedStyle;
+use jsui::renderer::{EventName, Renderer};
+use rquickjs::Object;
 use rquickjs::function::Func;
 use std::collections::HashMap;
 use std::time::Duration;
 
-fn make_engine(bundle: &str) -> engine::Engine {
-    let eng = engine::Engine::new();
-    eng.with_context(|ctx| {
-        ctx.globals()
-            .set(
-                "nativeLog",
-                Func::from(|msg: String| {
-                    println!("[JS] {}", msg);
-                }),
-            )
-            .unwrap();
-    });
-    eng.boot(bundle);
-    eng
-}
+use crate::input::{InputDevice, TouchEvent};
 
 fn main() {
     // Load all fonts from assets directory
     let mut fonts = HashMap::new();
     let assets_dir = std::path::Path::new("assets");
+
     if let Ok(entries) = std::fs::read_dir(assets_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -39,22 +29,6 @@ fn main() {
         }
     }
 
-    let default_font = fonts
-        .keys()
-        .next()
-        .expect("No .ttf fonts found in assets/")
-        .clone();
-
-    #[cfg(debug_assertions)]
-    let bundle = std::fs::read_to_string("dist/bundle.js").expect("Run 'npm run build' first");
-    #[cfg(not(debug_assertions))]
-    let bundle = include_str!("../../../dist/bundle.js").to_string();
-
-    #[cfg(not(feature = "hotreload"))]
-    let engine = make_engine(&bundle);
-    #[cfg(feature = "hotreload")]
-    let mut engine = make_engine(&bundle);
-
     #[cfg(feature = "hotreload")]
     let reload_rx = jsui_dev::spawn_reload_listener();
 
@@ -66,75 +40,73 @@ fn main() {
 
     println!("Display: {}x{}", display_width, display_height);
 
-    // Initial tree read + layout + render
-    let mut layout_tree = engine::read_and_layout(
-        &engine,
-        &default_font,
-        &fonts,
-        display_width as f32,
-        display_height as f32,
+    let canvas = Canvas::new(display_width, display_height);
+    let default_font = "Roboto-Regular";
+
+    let mut renderer = Renderer::new(
+        |ctx| {
+            let console = Object::new(ctx.clone()).unwrap();
+
+            console
+                .set(
+                    "log",
+                    Func::from(|msg: String| {
+                        println!("[JS] {}", msg);
+                    }),
+                )
+                .unwrap();
+
+            ctx.globals().set("console", console).unwrap();
+        },
+        canvas,
+        fonts,
+        InheritedStyle {
+            color: RgbColor::from_array([255, 255, 255]),
+            font_name: default_font.to_string(),
+            font_size: 24.0,
+        },
     );
 
-    let mut fb = render::Framebuffer::new(display_width, display_height);
-    render::render_tree(&mut fb, &layout_tree, &fonts);
-    display.blit_from(&fb);
+    #[cfg(debug_assertions)]
+    let bundle = std::fs::read_to_string("dist/bundle.js").expect("Run 'npm run build' first");
+    #[cfg(not(debug_assertions))]
+    let bundle = include_str!("../../../dist/bundle.js").to_string();
+
+    renderer.engine.load(&bundle);
 
     // Touch input
-    let mut touch_device = input::find_touch_device();
-    let mut touch_state = input::TouchState::default();
-    let mut was_pressed = false;
+    let mut touch_device = InputDevice::get_touchscreen_device();
 
-    if touch_device.is_none() {
+    if let Some(ref mut touch_device) = touch_device {
+        touch_device.set_nonblocking();
+    } else {
         println!("Warning: No touchscreen device found");
     }
 
     // Event loop
     loop {
-        if let Some(ref mut dev) = touch_device {
-            input::read_touch(dev, &mut touch_state);
-        }
-
-        if touch_state.pressed && !was_pressed {
-            if let Some(js_node_id) =
-                layout::hit_test(&layout_tree, touch_state.x as f32, touch_state.y as f32)
-            {
-                engine.dispatch_event(js_node_id, "PressIn", |_ctx, details| {
-                    details.set("x", touch_state.x).unwrap();
-                    details.set("y", touch_state.y).unwrap();
-                });
+        if let Some(ref mut touch_device) = touch_device {
+            match touch_device.read_touch_event() {
+                Some(TouchEvent::PressIn { x, y }) => {
+                    renderer.press_event(x as f32, y as f32, EventName::PressIn);
+                }
+                Some(TouchEvent::PressOut { x, y }) => {
+                    renderer.press_event(x as f32, y as f32, EventName::PressOut);
+                }
+                _ => {}
             }
         }
 
-        if !touch_state.pressed && was_pressed {
-            if let Some(js_node_id) =
-                layout::hit_test(&layout_tree, touch_state.x as f32, touch_state.y as f32)
-            {
-                engine.dispatch_event(js_node_id, "PressOut", |_ctx, details| {
-                    details.set("x", touch_state.x).unwrap();
-                    details.set("y", touch_state.y).unwrap();
-                });
-            }
-        }
+        renderer.tick();
 
-        was_pressed = touch_state.pressed;
-        engine.tick();
+        if renderer.render() {
+            display.blit_from(&renderer.canvas);
+        }
 
         #[cfg(feature = "hotreload")]
         if let Ok(new_bundle) = reload_rx.try_recv() {
             println!("[dev] reloading bundle...");
-            engine = make_engine(&new_bundle);
-        }
-
-        if engine.has_update() {
-            layout_tree = engine::rerender(
-                &engine,
-                &default_font,
-                &fonts,
-                &mut fb,
-                display_width as f32,
-                display_height as f32,
-            );
-            display.blit_from(&fb);
+            renderer.reload(&new_bundle);
         }
 
         std::thread::sleep(Duration::from_millis(16));
