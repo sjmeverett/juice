@@ -16,24 +16,8 @@ const DISPLAY_WIDTH: u32 = 800;
 const DISPLAY_HEIGHT: u32 = 800;
 
 fn main() {
-    // Load all fonts from assets directory
     let mut fonts = HashMap::new();
-    let assets_dir = std::path::Path::new("assets");
-
-    if let Ok(entries) = std::fs::read_dir(assets_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "ttf") {
-                let name = path.file_stem().unwrap().to_string_lossy().to_string();
-                let data = std::fs::read(&path).unwrap();
-                let font = Font::from_bytes(data, FontSettings::default()).unwrap();
-                fonts.insert(name, font);
-            }
-        }
-    }
-
     let reload_rx = juice_dev::spawn_reload_listener();
-
     let canvas = Canvas::new(DISPLAY_WIDTH, DISPLAY_HEIGHT);
     let default_font = "Roboto-Regular";
 

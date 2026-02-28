@@ -52,7 +52,8 @@
           },
           "complexity": {
             "noBannedTypes": "off"
-          }
+          },
+          "a11y": "off"
         }
       }
     },

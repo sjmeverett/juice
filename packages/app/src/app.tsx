@@ -2,8 +2,12 @@ import circleImageIcon from "@iconify/icons-fluent/circle-image-24-regular.js";
 import { Box } from "@juice/core";
 import { useState } from "preact/hooks";
 import Button from "./Button.js";
+import robotoBold from "./fonts/Roboto-Bold.ttf";
+import robotoRegular from "./fonts/Roboto-Regular.ttf";
 import Icon from "./Icon.js";
-import testImg from "./testimg.png";
+
+renderer.addFont("Roboto-Regular", robotoRegular);
+renderer.addFont("Roboto-Bold", robotoBold);
 
 export function App() {
   const [count, setCount] = useState(0);
@@ -28,7 +32,7 @@ export function App() {
           setCount(count + 1);
           console.log(`Counter incremented to ${count + 1}`);
         }}
-        buttonColor={["#ff8000", "#ff4000"]}
+        buttonColor={["#ff8000", "#ff7000"]}
         style={{
           padding: 20,
           fontSize: 36,
@@ -41,10 +45,6 @@ export function App() {
         <Icon icon={circleImageIcon} size="1.2em" />
         Increment
       </Button>
-
-      <Box style={{ marginTop: 50, padding: 30 }}>
-        <img src={testImg} width={100} height={100} />
-      </Box>
     </Box>
   );
 }

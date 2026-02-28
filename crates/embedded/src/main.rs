@@ -1,7 +1,6 @@
 mod drm;
 mod input;
 
-use fontdue::{Font, FontSettings};
 use juice::canvas::{Canvas, RgbColor};
 use juice::inherited_style::InheritedStyle;
 use juice::renderer::{EventName, Renderer};
@@ -13,21 +12,7 @@ use std::time::Duration;
 use crate::input::{InputDevice, TouchEvent};
 
 fn main() {
-    // Load all fonts from assets directory
     let mut fonts = HashMap::new();
-    let assets_dir = std::path::Path::new("assets");
-
-    if let Ok(entries) = std::fs::read_dir(assets_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "ttf") {
-                let name = path.file_stem().unwrap().to_string_lossy().to_string();
-                let data = std::fs::read(&path).unwrap();
-                let font = Font::from_bytes(data, FontSettings::default()).unwrap();
-                fonts.insert(name, font);
-            }
-        }
-    }
 
     #[cfg(feature = "hotreload")]
     let reload_rx = juice_dev::spawn_reload_listener();

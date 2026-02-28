@@ -1,9 +1,10 @@
+use base64::engine::general_purpose;
 use embedded_graphics::{
     pixelcolor::Rgb888,
     prelude::*,
     primitives::{CornerRadii, PrimitiveStyle, Rectangle, RoundedRectangle},
 };
-use fontdue::Font;
+use fontdue::{Font, FontSettings};
 use resvg::{tiny_skia::Pixmap, usvg::Tree};
 use rquickjs::{
     CatchResultExt, Ctx, Function, Object, Persistent,
@@ -22,11 +23,12 @@ use crate::{
 pub struct Renderer {
     pub engine: Engine,
     pub canvas: Canvas,
-    fonts: HashMap<String, Font>,
+    pub dom: Rc<RefCell<Option<Dom>>>,
+
+    fonts: Rc<RefCell<HashMap<String, Font>>>,
     base_style: InheritedStyle,
     event_callback: Rc<RefCell<Option<Persistent<Function<'static>>>>>,
     should_update: Rc<RefCell<bool>>,
-    pub dom: Rc<RefCell<Option<Dom>>>,
     setup: Rc<dyn Fn(Ctx)>,
 }
 
@@ -61,7 +63,7 @@ impl Renderer {
         let renderer = Self {
             engine: Engine::new(move |ctx| setup2(ctx)),
             canvas,
-            fonts,
+            fonts: Rc::new(RefCell::new(fonts)),
             base_style,
             dom: Rc::new(RefCell::new(None)),
             event_callback: Rc::new(RefCell::new(None)),
@@ -91,7 +93,8 @@ impl Renderer {
         let should_update_cell = self.should_update.clone();
         let event_callback_cell = self.event_callback.clone();
         let base_style = self.base_style.clone();
-        let fonts = Rc::new(self.fonts.clone());
+        let fonts_cell = self.fonts.clone();
+        let fonts_for_add = self.fonts.clone();
         let canvas_width = self.canvas.width as f32;
         let canvas_height = self.canvas.height as f32;
 
@@ -105,7 +108,7 @@ impl Renderer {
                         match Dom::new(
                             &content,
                             base_style.clone(),
-                            &fonts,
+                            &*fonts_cell.borrow(),
                             canvas_width,
                             canvas_height,
                         ) {
@@ -131,6 +134,25 @@ impl Renderer {
             )
             .unwrap();
 
+        renderer
+            .set(
+                "addFont",
+                Func::from(MutFn::from(move |name: String, src: String| {
+                    match src.split(',').nth(1).and_then(|str| {
+                        base64::Engine::decode(&general_purpose::STANDARD, str).ok()
+                    }) {
+                        Some(data) => {
+                            let font = Font::from_bytes(data, FontSettings::default()).unwrap();
+                            fonts_for_add.borrow_mut().insert(name, font);
+                        }
+                        None => {
+                            println!("addFont: font not a valid base64 URL");
+                        }
+                    }
+                })),
+            )
+            .unwrap();
+
         ctx.globals().set("renderer", renderer).unwrap();
     }
 
@@ -139,7 +161,7 @@ impl Renderer {
             let dom_ref = self.dom.borrow();
 
             if let Some(dom) = dom_ref.as_ref() {
-                render_node(dom, &mut self.canvas, &self.fonts, dom.root_id, 0.0, 0.0);
+                render_node(dom, &mut self.canvas, &*self.fonts.borrow(), dom.root_id, 0.0, 0.0);
             }
 
             *self.should_update.borrow_mut() = false;

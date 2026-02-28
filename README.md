@@ -2,7 +2,7 @@
 
 Javascript User Interface for Compact Electronics.
 
-A UI engine for embedded Linux displays. Runs Preact inside QuickJS, uses a lightweight fake DOM that serializes to JSON via `toJSON()`, then lays it out with Taffy and renders to a framebuffer using fontdue.
+A UI engine for embedded Linux displays. Runs Preact inside QuickJS, uses a lightweight fake DOM that serializes to JSON via `toJSON()`, then lays it out with Taffy and renders to a framebuffer using fontdue for text, resvg for SVGs, and the image crate for raster images.
 
 ## Architecture
 
@@ -202,10 +202,11 @@ declare global {
 }
 ```
 
-The `renderer` object is registered on the Rust side by `Renderer` and exposes a single method:
+The `renderer` object is registered on the Rust side by `Renderer` and exposes:
 
 ```js
 renderer.update(json, eventCallback) // sends serialized DOM to Rust, registers event callback
+renderer.addFont(name, dataUrl)      // registers a font from a base64 data URL
 ```
 
 ## Hot reloading
@@ -246,7 +247,7 @@ cross build -p embedded --release
 
 Requires `cross` installed. The `Dockerfile.cross` installs `libclang-dev` for rquickjs bindgen.
 
-Deploy to device: copy the binary + `dist/bundle.js` + `assets/` directory.
+Deploy to device: copy the binary + `dist/bundle.js`. If loading fonts from files on the Rust side, include those font files as well.
 
 ## Components (TypeScript)
 
@@ -282,7 +283,7 @@ render(
 | `flexDirection` | `"row" \| "column"` | Main axis direction |
 | `flexGrow` | `number` | Flex grow factor |
 | `flexShrink` | `number` | Flex shrink factor |
-| `font` | `string` | Font name matching a .ttf file in `assets/` (inherited) |
+| `font` | `string` | Font name registered via `renderer.addFont()` or loaded on the Rust side (inherited) |
 | `fontSize` | `number` | Font size in pixels (inherited) |
 | `gap` | `number` | Gap between flex children |
 | `width` / `height` | `number \| string` | Size in pixels or percent (e.g. `"50%"`) |
@@ -300,3 +301,101 @@ render(
 | `onPressIn` | Fired when a touch/click begins on the element |
 | `onPressOut` | Fired when a touch/click ends on the element |
 | `onPress` | Convenience event: fires on PressOut if the press started on the same element |
+
+### Images
+
+Use the standard `<img>` tag with a data URL. The esbuild config converts image imports to base64 data URLs:
+
+```tsx
+import myImage from "./myimage.png";
+
+<img src={myImage} width={100} height={100} />
+```
+
+Supported formats: PNG, JPEG, GIF, WebP. Images are decoded on the Rust side and rendered with alpha blending. If the rendered size differs from the source, the image is resized using triangle filtering.
+
+### SVGs
+
+SVGs can be used inline with JSX. The `currentColor` keyword is supported for inheriting the text color:
+
+```tsx
+<svg width={24} height={24} viewBox="0 0 24 24">
+  <path d="M12 2L2 22h20L12 2z" fill="currentColor" />
+</svg>
+```
+
+SVGs are rendered using resvg and support most SVG features.
+
+Note: unlike in regular React where you'd use `dangerouslySetInnerHtml` on the `svg` tag if you had a string with path data (e.g. from iconify) you wanted to render as the body of the `svg`, juice provides a simple `markup` prop.
+
+### Fonts
+
+Fonts can be loaded two ways:
+
+**1. Bundle registration (JS-side):** Import fonts as data URLs and register them with `renderer.addFont()`:
+
+```tsx
+import myFont from "./fonts/MyFont.ttf";
+
+renderer.addFont("MyFont", myFont);
+
+// Then use it in styles:
+<Box style={{ font: "MyFont" }}>Hello</Box>
+```
+
+This bundles fonts into the JS, keeping deployment simple (just the binary + bundle). Requires `.ttf` in the esbuild loader config (see [Bundler configuration](#bundler-configuration)).
+
+**2. Rust-side loading:** Load fonts from files and pass them to `Renderer::new()`:
+
+```rust
+use fontdue::{Font, FontSettings};
+use std::collections::HashMap;
+
+let mut fonts = HashMap::new();
+
+// Load from a directory
+let font_dir = std::path::Path::new("assets");
+if let Ok(entries) = std::fs::read_dir(font_dir) {
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "ttf") {
+            let name = path.file_stem().unwrap().to_string_lossy().to_string();
+            let data = std::fs::read(&path).unwrap();
+            let font = Font::from_bytes(data, FontSettings::default()).unwrap();
+            fonts.insert(name, font);
+        }
+    }
+}
+
+// Or load individual fonts
+let data = std::fs::read("fonts/MyFont.ttf").unwrap();
+let font = Font::from_bytes(data, FontSettings::default()).unwrap();
+fonts.insert("MyFont".to_string(), font);
+
+let renderer = Renderer::new(setup, canvas, fonts, base_style);
+```
+
+## Bundler configuration
+
+Configure asset loaders in your `esbuild` (or whatever bundler you're using) script:
+
+```typescript
+await esbuild.build({
+    // ...
+    loader: {
+        // Images → base64 data URLs
+        ".png": "dataurl",
+        ".jpg": "dataurl",
+        ".jpeg": "dataurl",
+        ".gif": "dataurl",
+        ".webp": "dataurl",
+        // Fonts → base64 data URLs (for renderer.addFont())
+        ".ttf": "dataurl",
+        ".otf": "dataurl",
+        ".woff": "dataurl",
+        ".woff2": "dataurl",
+    },
+});
+```
+
+The `dev-server` is already set up this way.
