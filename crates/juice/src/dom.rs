@@ -165,8 +165,8 @@ fn build_node(
 
             let style = Style {
                 size: Size {
-                    width: parse_dimension(width),
-                    height: parse_dimension(height),
+                    width: parse_dimension(width, inherited_style.font_size),
+                    height: parse_dimension(height, inherited_style.font_size),
                 },
                 ..Default::default()
             };
@@ -230,8 +230,8 @@ fn build_node(
                 flex_grow: flex_grow.unwrap_or(0.0),
                 flex_shrink: flex_shrink.unwrap_or(1.0),
                 size: Size {
-                    width: parse_dimension(width),
-                    height: parse_dimension(height),
+                    width: parse_dimension(width, inherited_style.font_size),
+                    height: parse_dimension(height, inherited_style.font_size),
                 },
                 padding: match padding {
                     Some([top, right, bottom, left]) => Rect {
@@ -275,7 +275,7 @@ fn build_node(
     }
 }
 
-fn parse_dimension(s: &str) -> Dimension {
+fn parse_dimension(s: &str, font_height: f32) -> Dimension {
     if let Some(n) = s.strip_suffix("px") {
         n.parse::<f32>()
             .map(Dimension::length)
@@ -283,6 +283,10 @@ fn parse_dimension(s: &str) -> Dimension {
     } else if let Some(n) = s.strip_suffix("%") {
         n.parse::<f32>()
             .map(|v| Dimension::percent(v / 100.0))
+            .unwrap_or_else(|_| Dimension::auto())
+    } else if let Some(n) = s.strip_suffix("em") {
+        n.parse::<f32>()
+            .map(|v| Dimension::length(v * font_height))
             .unwrap_or_else(|_| Dimension::auto())
     } else {
         Dimension::auto()

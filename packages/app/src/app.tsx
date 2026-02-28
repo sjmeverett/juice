@@ -37,7 +37,7 @@ export function App() {
           alignSelf: "flex-start",
         }}
       >
-        <Icon icon={circleImageIcon} size={48} />
+        <Icon icon={circleImageIcon} size="1.2em" />
         Increment
       </Button>
     </Box>

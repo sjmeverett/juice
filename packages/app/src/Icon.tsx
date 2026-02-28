@@ -4,7 +4,7 @@ type IconInput = IconifyIcon | { default: IconifyIcon; __esModule?: boolean };
 
 export interface IconProps {
   icon: IconInput;
-  size?: number;
+  size?: number | string;
 }
 
 export default function Icon({ icon, size = 24 }: IconProps) {
