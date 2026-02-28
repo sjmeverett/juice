@@ -127,6 +127,51 @@ impl Canvas {
             cursor_x += metrics.advance_width;
         }
     }
+
+    /// Blit premultiplied RGBA pixels onto the canvas with alpha blending.
+    pub fn blit_premultiplied_rgba(
+        &mut self,
+        data: &[u8],
+        src_w: u32,
+        src_h: u32,
+        dst_x: i32,
+        dst_y: i32,
+    ) {
+        for row in 0..src_h as i32 {
+            let cy = dst_y + row;
+            if cy < 0 || cy >= self.height as i32 {
+                continue;
+            }
+
+            for col in 0..src_w as i32 {
+                let cx = dst_x + col;
+                if cx < 0 || cx >= self.width as i32 {
+                    continue;
+                }
+
+                let si = ((row as u32 * src_w + col as u32) * 4) as usize;
+                let a = data[si + 3];
+
+                if a == 0 {
+                    continue;
+                }
+
+                let di = (cy as u32 * self.width + cx as u32) as usize;
+
+                if a == 255 {
+                    self.pixels[di] = to_xrgb(data[si], data[si + 1], data[si + 2]);
+                } else {
+                    // src is premultiplied: out = src + dst * (1 - src_alpha/255)
+                    let bg = self.pixels[di];
+                    let inv_a = 255 - a as u16;
+                    let r = (data[si] as u16 + (((bg >> 16) & 0xFF) as u16 * inv_a + 127) / 255) as u8;
+                    let g = (data[si + 1] as u16 + (((bg >> 8) & 0xFF) as u16 * inv_a + 127) / 255) as u8;
+                    let b = (data[si + 2] as u16 + ((bg & 0xFF) as u16 * inv_a + 127) / 255) as u8;
+                    self.pixels[di] = to_xrgb(r, g, b);
+                }
+            }
+        }
+    }
 }
 
 impl DrawTarget for Canvas {

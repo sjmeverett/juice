@@ -17,6 +17,7 @@ export default function Button({
 	return (
 		<Box
 			style={{
+				gap: 10,
 				...style,
 				background: pressed ? buttonColor[1] : buttonColor[0],
 			}}

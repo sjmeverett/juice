@@ -1,6 +1,7 @@
 import { UIElement } from "./UIElement.js";
 import { PressEvent } from "./UIEvent.js";
 import type { UINode } from "./UINode.js";
+import { UISvgElement } from "./UISvgElement.js";
 import { UITextNode } from "./UITextNode.js";
 
 export class UIDocument extends UIElement {
@@ -33,6 +34,9 @@ export class UIDocument extends UIElement {
 	}
 
 	createElementNS(namespaceURI: string, tagName: string): UIElement {
+		if (namespaceURI === UISvgElement.namespace) {
+			return new UISvgElement(tagName);
+		}
 		return new UIElement(tagName, namespaceURI);
 	}
 

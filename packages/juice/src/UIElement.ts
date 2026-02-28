@@ -21,6 +21,8 @@ let nextNodeId = 0;
 export class UIElement<
 	Props extends UIElementProps = UIElementProps,
 > extends UINode {
+	public static readonly namespace: string = "http://www.w3.org/1999/xhtml";
+
 	public readonly nodeId;
 	public readonly tagName: string;
 	public readonly props: Partial<Props> = {};
@@ -40,14 +42,13 @@ export class UIElement<
 		delete (this.props as Record<string, unknown>)[key];
 	}
 
-	toJSON() {
+	toJSON(): unknown {
 		const style = this.style;
 
 		return {
 			type: "element",
 			tag:
-				this.namespaceURI &&
-				this.namespaceURI !== "http://www.w3.org/1999/xhtml"
+				this.namespaceURI && this.namespaceURI !== UIElement.namespace
 					? `${this.namespaceURI}:${this.tagName}`
 					: this.tagName,
 			id: this.nodeId,

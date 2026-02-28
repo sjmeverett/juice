@@ -4,6 +4,7 @@ use embedded_graphics::{
     primitives::{CornerRadii, PrimitiveStyle, Rectangle, RoundedRectangle},
 };
 use fontdue::Font;
+use resvg::{tiny_skia::Pixmap, usvg::Tree};
 use rquickjs::{
     CatchResultExt, Ctx, Function, Object, Persistent,
     prelude::{Func, MutFn},
@@ -247,6 +248,49 @@ fn render_node(
         }) => {
             if let Some(font) = fonts.get(font_name) {
                 canvas.draw_text(font, content, *font_size, *color, x, y);
+            }
+        }
+
+        Some(NodeContext::Svg {
+            markup,
+            inherited_color,
+            ..
+        }) => {
+            let render_w = w as u32;
+            let render_h = h as u32;
+
+            if render_w > 0 && render_h > 0 {
+                let color_hex = format!(
+                    "#{:02x}{:02x}{:02x}",
+                    inherited_color.r, inherited_color.g, inherited_color.b
+                );
+
+                let resolved = markup.replace("currentColor", &color_hex);
+                let options = resvg::usvg::Options::default();
+
+                match Tree::from_str(&resolved, &options) {
+                    Ok(tree) => {
+                        if let Some(mut pixmap) = Pixmap::new(render_w, render_h) {
+                            let svg_size = tree.size();
+                            let sx = render_w as f32 / svg_size.width();
+                            let sy = render_h as f32 / svg_size.height();
+                            let transform = resvg::tiny_skia::Transform::from_scale(sx, sy);
+
+                            resvg::render(&tree, transform, &mut pixmap.as_mut());
+
+                            canvas.blit_premultiplied_rgba(
+                                pixmap.data(),
+                                render_w,
+                                render_h,
+                                x as i32,
+                                y as i32,
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        println!("Error parsing SVG: {:?}", err);
+                    }
+                }
             }
         }
 

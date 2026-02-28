@@ -121,13 +121,14 @@ impl Dom {
 
         // none of the children were hit, which means we can say we were hit
         // it's only relevant if we're a non-text node with an ID on the JavaScript side though
-        if let Some(NodeContext::Element {
-            js_id: Some(js_id), ..
-        }) = self.tree.get_node_context(node_id)
-        {
-            Some(*js_id)
-        } else {
-            None
+        match self.tree.get_node_context(node_id) {
+            Some(NodeContext::Element {
+                js_id: Some(js_id), ..
+            }) => Some(*js_id),
+            Some(NodeContext::Svg {
+                js_id: Some(js_id), ..
+            }) => Some(*js_id),
+            _ => None,
         }
     }
 }
@@ -148,6 +149,29 @@ fn build_node(
 
             tree.new_leaf_with_context(Style::default(), context)
                 .unwrap()
+        }
+
+        Node::Svg {
+            id,
+            markup,
+            width,
+            height,
+        } => {
+            let context = NodeContext::Svg {
+                markup: markup.clone(),
+                js_id: *id,
+                inherited_color: inherited_style.color,
+            };
+
+            let style = Style {
+                size: Size {
+                    width: parse_dimension(width),
+                    height: parse_dimension(height),
+                },
+                ..Default::default()
+            };
+
+            tree.new_leaf_with_context(style, context).unwrap()
         }
 
         Node::Element {
@@ -307,6 +331,16 @@ pub enum Node {
     },
     #[serde(rename = "text")]
     Text { text: String },
+    #[serde(rename = "svg")]
+    Svg {
+        #[serde(default)]
+        id: Option<u32>,
+        markup: String,
+        #[serde(default)]
+        width: String,
+        #[serde(default)]
+        height: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -321,5 +355,10 @@ pub enum NodeContext {
         color: RgbColor,
         font_name: String,
         font_size: f32,
+    },
+    Svg {
+        markup: String,
+        js_id: Option<u32>,
+        inherited_color: RgbColor,
     },
 }

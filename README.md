@@ -1,6 +1,6 @@
 # juice
 
-**J**avaScript **U**ser **I**nterface for **C**ompact **E**lectronics.
+Javascript User Interface for Compact Electronics.
 
 A UI engine for embedded Linux displays. Runs Preact inside QuickJS, uses a lightweight fake DOM that serializes to JSON via `toJSON()`, then lays it out with Taffy and renders to a framebuffer using fontdue.
 

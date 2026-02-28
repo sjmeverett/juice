@@ -46,6 +46,8 @@ export function acceptPixelsOrPercent(value: unknown): string | undefined {
 		return `${value}px`;
 	} else if (typeof value === "string" && /^\d+(px|%)$/.test(value)) {
 		return value;
+	}else if (typeof value === "string" && /^\d+$/.test(value)) {
+		return `${value}px`;
 	} else {
 		return undefined;
 	}

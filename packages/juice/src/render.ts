@@ -28,6 +28,8 @@ export function render(app: ComponentChild) {
 	const update = () => {
 		const contents = JSON.stringify(document.firstChild);
 
+		// console.log(contents);
+
 		renderer.update(contents, (nodeId, event) => {
 			const node = document.findElementByNodeId(nodeId);
 
