@@ -3,7 +3,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "build": "esbuild packages/app/src/index.tsx --bundle --format=iife --outfile=dist/bundle.js --jsx=automatic --jsx-import-source=preact",
-    "dev": "jsui dev packages/app/src/index.tsx"
+    "dev": "juice dev packages/app/src/index.tsx"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

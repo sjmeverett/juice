@@ -4,14 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-jsui = { path = "../jsui" }
+juice = { path = "../juice" }
 embedded-graphics = "0.8"
 fontdue = "0.9"
 rquickjs = { version = "0.11", features = ["macro", "bindgen"] }
 drm = "0.14"
 evdev = "0.13"
 libc = "0.2"
-jsui-dev = { path = "../jsui-dev", optional = true }
+juice-dev = { path = "../juice-dev", optional = true }
 
 [features]
-hotreload = ["jsui-dev"]
+hotreload = ["juice-dev"]

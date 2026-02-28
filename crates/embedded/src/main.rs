@@ -2,9 +2,9 @@ mod drm;
 mod input;
 
 use fontdue::{Font, FontSettings};
-use jsui::canvas::{Canvas, RgbColor};
-use jsui::inherited_style::InheritedStyle;
-use jsui::renderer::{EventName, Renderer};
+use juice::canvas::{Canvas, RgbColor};
+use juice::inherited_style::InheritedStyle;
+use juice::renderer::{EventName, Renderer};
 use rquickjs::Object;
 use rquickjs::function::Func;
 use std::collections::HashMap;
@@ -30,7 +30,7 @@ fn main() {
     }
 
     #[cfg(feature = "hotreload")]
-    let reload_rx = jsui_dev::spawn_reload_listener();
+    let reload_rx = juice_dev::spawn_reload_listener();
 
     // Hardware init
     let mut display =

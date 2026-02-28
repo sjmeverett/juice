@@ -1,12 +1,12 @@
 {
-  "name": "@jsui/core",
+  "name": "@juice/core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "bin": {
-    "jsui": "./src/cli.ts"
+    "juice": "./src/cli.ts"
   },
   "exports": {
     ".": {

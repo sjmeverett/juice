@@ -1,6 +1,8 @@
-# jsui
+# juice
 
-A JavaScript UI engine for embedded Linux displays. Runs Preact inside QuickJS, uses a lightweight fake DOM that serializes to JSON via `toJSON()`, then lays it out with Taffy and renders to a framebuffer using fontdue.
+**J**avaScript **U**ser **I**nterface for **C**ompact **E**lectronics.
+
+A UI engine for embedded Linux displays. Runs Preact inside QuickJS, uses a lightweight fake DOM that serializes to JSON via `toJSON()`, then lays it out with Taffy and renders to a framebuffer using fontdue.
 
 ## Architecture
 
@@ -12,7 +14,7 @@ A JavaScript UI engine for embedded Linux displays. Runs Preact inside QuickJS, 
 │  QuickJS (via rquickjs)                         │
 │  JS ←→ Rust function bridge                     │
 ├─────────────────────────────────────────────────┤
-│  jsui lib crate                                 │
+│  juice lib crate                                │
 │  DOM → Taffy layout → Canvas                    │
 ├─────────────────────────────────────────────────┤
 │  Display target (DrawTarget<Color = Rgb888>)    │
@@ -25,19 +27,19 @@ A JavaScript UI engine for embedded Linux displays. Runs Preact inside QuickJS, 
 
 | Package | Description |
 |---------|-------------|
-| `packages/jsui` | Core TypeScript library: fake DOM classes (`UINode`, `UIElement`, `UITextNode`, `UIDocument`), event system, Preact integration, and `render()` entrypoint |
+| `packages/juice` | Core TypeScript library: fake DOM classes (`UINode`, `UIElement`, `UITextNode`, `UIDocument`), event system, Preact integration, and `render()` entrypoint |
 | `packages/app` | Example Preact application |
 
 ## Crates
 
 | Crate | Type | Description |
 |-------|------|-------------|
-| `crates/jsui` | lib | Core engine: QuickJS runtime, DOM parsing, Taffy layout, canvas rendering |
-| `crates/jsui-dev` | lib | Dev server for hot-reloading JS bundles |
+| `crates/juice` | lib | Core engine: QuickJS runtime, DOM parsing, Taffy layout, canvas rendering |
+| `crates/juice-dev` | lib | Dev server for hot-reloading JS bundles |
 | `crates/simulator` | bin | Desktop simulator using embedded-graphics-simulator (SDL2) |
 | `crates/embedded` | bin | Embedded Linux target using DRM/KMS display + evdev touch input |
 
-### jsui lib modules
+### juice lib modules
 
 | Module | Description |
 |--------|-------------|
@@ -63,7 +65,7 @@ cargo run -p simulator # opens SDL2 window
 Create a `Renderer` with a setup closure for registering native globals, a canvas, fonts, and a base inherited style:
 
 ```rust
-use jsui::{canvas::{Canvas, RgbColor}, inherited_style::InheritedStyle, renderer::Renderer};
+use juice::{canvas::{Canvas, RgbColor}, inherited_style::InheritedStyle, renderer::Renderer};
 
 let mut renderer = Renderer::new(
     |ctx| {
@@ -192,7 +194,7 @@ Key attributes:
 
 ### TypeScript declarations
 
-Declare native globals in `packages/jsui/src/render.ts` or a separate `.d.ts`:
+Declare native globals in `packages/juice/src/render.ts` or a separate `.d.ts`:
 
 ```typescript
 declare global {
@@ -208,16 +210,16 @@ renderer.update(json, eventCallback) // sends serialized DOM to Rust, registers 
 
 ## Hot reloading
 
-The `jsui` CLI watches for TypeScript changes, rebuilds with esbuild, and pushes the new bundle to the running app over WebSocket.
+The `juice` CLI watches for TypeScript changes, rebuilds with esbuild, and pushes the new bundle to the running app over WebSocket.
 
 In one terminal, start the dev server:
 
 ```sh
-npx jsui dev <entrypoint> [--port <port>]
+npx juice dev <entrypoint> [--port <port>]
 
 # e.g.
-npx jsui dev packages/app/src/index.tsx
-npx jsui dev src/index.tsx --port 4000
+npx juice dev packages/app/src/index.tsx
+npx juice dev src/index.tsx --port 4000
 ```
 
 In another, run the simulator with the `DEV_SERVER` env var pointing at the WebSocket:
@@ -226,7 +228,7 @@ In another, run the simulator with the `DEV_SERVER` env var pointing at the WebS
 DEV_SERVER=ws://localhost:3000 cargo run -p simulator
 ```
 
-On each rebuild the dev server broadcasts the new bundle. The Rust side (`jsui-dev` crate) connects via WebSocket on a background thread and the `Renderer` re-creates the JS engine with the new bundle, preserving the canvas and fonts.
+On each rebuild the dev server broadcasts the new bundle. The Rust side (`juice-dev` crate) connects via WebSocket on a background thread and the `Renderer` re-creates the JS engine with the new bundle, preserving the canvas and fonts.
 
 For the embedded target, use the `hotreload` feature:
 
@@ -251,7 +253,7 @@ Deploy to device: copy the binary + `dist/bundle.js` + `assets/` directory.
 The `Box` component is the fundamental building block. All layout is flexbox-based via Taffy.
 
 ```tsx
-import { Box, render } from "@jsui/core";
+import { Box, render } from "@juice/core";
 
 render(
     <Box style={{ flexDirection: "column", padding: 40, gap: 10, background: "#1a1a2e" }}>

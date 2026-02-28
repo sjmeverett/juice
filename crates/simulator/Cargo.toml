@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-jsui = { path = "../jsui" }
+juice = { path = "../juice" }
 embedded-graphics = "0.8"
 embedded-graphics-simulator = "0.8"
 fontdue = "0.9"
 rquickjs = { version = "0.11", features = ["macro", "bindgen"] }
-jsui-dev = { path = "../jsui-dev" }
+juice-dev = { path = "../juice-dev" }

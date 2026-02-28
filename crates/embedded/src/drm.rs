@@ -3,7 +3,7 @@ use drm::buffer::Buffer;
 use drm::control::{Device as ControlDevice, Mode, connector, crtc, dumbbuffer, framebuffer};
 use embedded_graphics::pixelcolor::Rgb888;
 use embedded_graphics::prelude::*;
-use jsui::canvas::Canvas;
+use juice::canvas::Canvas;
 use std::fs::{File, OpenOptions};
 use std::os::unix::io::{AsFd, BorrowedFd};
 

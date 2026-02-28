@@ -1,4 +1,4 @@
-import { Box } from "@jsui/core";
+import { Box } from "@juice/core";
 import { useEffect, useState } from "preact/hooks";
 import Button from "./Button.js";
 

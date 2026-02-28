@@ -1,4 +1,4 @@
-import { Box, type BoxProps } from "@jsui/core";
+import { Box, type BoxProps } from "@juice/core";
 import { useState } from "preact/hooks";
 
 export interface ButtonProps extends BoxProps {

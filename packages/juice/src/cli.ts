@@ -22,13 +22,13 @@ if (command === "dev") {
 	}
 
 	if (!entryPoint) {
-		console.error("Usage: jsui dev <entrypoint> [--port <port>]");
+		console.error("Usage: juice dev <entrypoint> [--port <port>]");
 		process.exit(1);
 	}
 
 	startDevServer({ entryPoint, port });
 } else {
-	console.error("Usage: jsui <command>");
+	console.error("Usage: juice <command>");
 	console.error("");
 	console.error("Commands:");
 	console.error("  dev <entrypoint>   Start the dev server with hot reloading");

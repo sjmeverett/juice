@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@jsui/core": "*",
+    "@juice/core": "*",
     "preact": "^10.28.4"
   }
 }

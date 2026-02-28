@@ -4,7 +4,7 @@ use embedded_graphics_simulator::{
     OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::MouseButton,
 };
 use fontdue::{Font, FontSettings};
-use jsui::{
+use juice::{
     canvas::{Canvas, RgbColor},
     inherited_style::InheritedStyle,
     renderer::Renderer,
@@ -32,7 +32,7 @@ fn main() {
         }
     }
 
-    let reload_rx = jsui_dev::spawn_reload_listener();
+    let reload_rx = juice_dev::spawn_reload_listener();
 
     let canvas = Canvas::new(DISPLAY_WIDTH, DISPLAY_HEIGHT);
     let default_font = "Roboto-Regular";
@@ -84,7 +84,7 @@ fn main() {
                     renderer.press_event(
                         point.x as f32,
                         point.y as f32,
-                        jsui::renderer::EventName::PressIn,
+                        juice::renderer::EventName::PressIn,
                     );
                 }
 
@@ -95,7 +95,7 @@ fn main() {
                     renderer.press_event(
                         point.x as f32,
                         point.y as f32,
-                        jsui::renderer::EventName::PressOut,
+                        juice::renderer::EventName::PressOut,
                     );
                 }
 
