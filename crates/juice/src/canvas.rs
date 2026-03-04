@@ -2,6 +2,11 @@ use embedded_graphics::{
     pixelcolor::Rgb888, pixelcolor::RgbColor as _, prelude::*, primitives::Rectangle,
 };
 use fontdue::Font;
+use fontdue::layout::{
+    CoordinateSystem, HorizontalAlign, Layout as TextLayout, LayoutSettings, TextStyle,
+};
+
+use crate::inherited_style::TextAlign;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RgbColor {
@@ -98,45 +103,58 @@ impl Canvas {
         color: RgbColor,
         start_x: f32,
         start_y: f32,
+        max_width: Option<f32>,
+        text_align: TextAlign,
+        container_width: f32,
     ) {
-        let ascent = font
-            .horizontal_line_metrics(font_size)
-            .map(|m| m.ascent)
-            .unwrap_or(font_size * 0.8);
+        let mut text_layout = TextLayout::new(CoordinateSystem::PositiveYDown);
 
-        let mut cursor_x = start_x;
+        let horizontal_align = match text_align {
+            TextAlign::Left => HorizontalAlign::Left,
+            TextAlign::Center => HorizontalAlign::Center,
+            TextAlign::Right => HorizontalAlign::Right,
+        };
 
-        for ch in text.chars() {
-            let (metrics, bitmap) = font.rasterize(ch, font_size);
+        // For non-left alignment, fontdue needs the container width to align within
+        let layout_width = if text_align != TextAlign::Left {
+            Some(container_width)
+        } else {
+            max_width
+        };
+
+        text_layout.reset(&LayoutSettings {
+            max_width: layout_width,
+            horizontal_align,
+            ..LayoutSettings::default()
+        });
+
+        text_layout.append(
+            std::slice::from_ref(font),
+            &TextStyle::new(text, font_size, 0),
+        );
+
+        for glyph in text_layout.glyphs() {
+            if glyph.width == 0 || glyph.height == 0 {
+                continue;
+            }
+
+            let (metrics, bitmap) = font.rasterize(glyph.parent, font_size);
 
             for row in 0..metrics.height {
                 for col in 0..metrics.width {
                     let coverage = bitmap[row * metrics.width + col];
                     if coverage > 0 {
-                        let px = cursor_x as i32 + metrics.xmin + col as i32;
-
-                        let py =
-                            start_y as i32 + ascent as i32 - metrics.ymin - metrics.height as i32
-                                + row as i32;
-
+                        let px = start_x as i32 + glyph.x as i32 + col as i32;
+                        let py = start_y as i32 + glyph.y as i32 + row as i32;
                         self.blend_pixel(px, py, color, coverage);
                     }
                 }
             }
-
-            cursor_x += metrics.advance_width;
         }
     }
 
     /// Blit non-premultiplied RGBA pixels onto the canvas with alpha blending.
-    pub fn blit_rgba(
-        &mut self,
-        data: &[u8],
-        src_w: u32,
-        src_h: u32,
-        dst_x: i32,
-        dst_y: i32,
-    ) {
+    pub fn blit_rgba(&mut self, data: &[u8], src_w: u32, src_h: u32, dst_x: i32, dst_y: i32) {
         for row in 0..src_h as i32 {
             let cy = dst_y + row;
             if cy < 0 || cy >= self.height as i32 {
@@ -213,8 +231,10 @@ impl Canvas {
                     // src is premultiplied: out = src + dst * (1 - src_alpha/255)
                     let bg = self.pixels[di];
                     let inv_a = 255 - a as u16;
-                    let r = (data[si] as u16 + (((bg >> 16) & 0xFF) as u16 * inv_a + 127) / 255) as u8;
-                    let g = (data[si + 1] as u16 + (((bg >> 8) & 0xFF) as u16 * inv_a + 127) / 255) as u8;
+                    let r =
+                        (data[si] as u16 + (((bg >> 16) & 0xFF) as u16 * inv_a + 127) / 255) as u8;
+                    let g = (data[si + 1] as u16 + (((bg >> 8) & 0xFF) as u16 * inv_a + 127) / 255)
+                        as u8;
                     let b = (data[si + 2] as u16 + ((bg & 0xFF) as u16 * inv_a + 127) / 255) as u8;
                     self.pixels[di] = to_xrgb(r, g, b);
                 }

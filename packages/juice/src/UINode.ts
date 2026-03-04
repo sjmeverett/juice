@@ -1,113 +1,124 @@
 import type { UIEvent, UIEventListener, UIEventMap } from "./UIEvent.js";
 
-export class UINode {
-	public readonly nodeType: number;
-	public readonly namespaceURI: string | null;
-	public readonly childNodes: UINode[];
+export abstract class UINode {
+  public readonly nodeType: number;
+  public readonly namespaceURI: string | null;
+  public readonly childNodes: UINode[];
 
-	public id?: number;
-	public parentNode: UINode | null;
-	private _eventListeners: Map<string, Set<Function>> = new Map();
+  public id?: number;
+  public parentNode: UINode | null;
 
-	public static ELEMENT_NODE = 1;
-	public static TEXT_NODE = 3;
+  private eventListeners: Map<string, Set<Function>> = new Map();
 
-	constructor(nodeType: number, namespaceURI: string | null = null) {
-		this.nodeType = nodeType;
-		this.namespaceURI = namespaceURI;
-		this.parentNode = null;
-		this.childNodes = [];
-	}
+  public static ELEMENT_NODE = 1;
+  public static TEXT_NODE = 3;
 
-	get firstChild() {
-		return this.childNodes[0] ?? null;
-	}
+  constructor(nodeType: number, namespaceURI: string | null = null) {
+    this.nodeType = nodeType;
+    this.namespaceURI = namespaceURI;
+    this.parentNode = null;
+    this.childNodes = [];
+  }
 
-	get nextSibling(): UINode | null {
-		if (!this.parentNode) return null;
+  get firstChild() {
+    return this.childNodes[0] ?? null;
+  }
 
-		const siblings = this.parentNode.childNodes;
-		return siblings[siblings.indexOf(this) + 1] ?? null;
-	}
+  get nextSibling(): UINode | null {
+    if (!this.parentNode) return null;
 
-	contains(other: UINode | null): boolean {
-		if (other === null) return false;
-		if (other === this) return true;
+    const siblings = this.parentNode.childNodes;
+    return siblings[siblings.indexOf(this) + 1] ?? null;
+  }
 
-		return this.childNodes.some(
-			(child) => child === other || child.contains(other),
-		);
-	}
+  contains(other: UINode | null): boolean {
+    if (other === null) return false;
+    if (other === this) return true;
 
-	insertBefore(node: UINode, child: UINode | null): UINode {
-		node.parentNode = this;
-		const idx = child ? this.childNodes.indexOf(child) : -1;
+    return this.childNodes.some(
+      (child) => child === other || child.contains(other),
+    );
+  }
 
-		if (idx >= 0) {
-			this.childNodes.splice(idx, 0, node);
-		} else {
-			this.childNodes.push(node);
-		}
+  insertBefore(node: UINode, child: UINode | null): UINode {
+    node.parentNode = this;
+    const idx = child ? this.childNodes.indexOf(child) : -1;
 
-		return node;
-	}
+    if (idx >= 0) {
+      this.childNodes.splice(idx, 0, node);
+    } else {
+      this.childNodes.push(node);
+    }
 
-	addEventListener<E extends keyof UIEventMap>(
-		type: E,
-		listener: UIEventListener<E>,
-	): () => void {
-		let set = this._eventListeners.get(type);
+    return node;
+  }
 
-		if (!set) {
-			set = new Set();
-			this._eventListeners.set(type, set);
-		}
+  private getEventListeners(type: string) {
+    const listeners = this.eventListeners.get(type);
 
-		set.add(listener);
+    if (listeners) {
+      return listeners;
+    }
 
-		return () => set!.delete(listener);
-	}
+    const newListeners = new Set<Function>();
+    this.eventListeners.set(type, newListeners);
 
-	removeEventListener<E extends keyof UIEventMap>(
-		type: E,
-		listener: UIEventListener<E>,
-	): void {
-		this._eventListeners.get(type)?.delete(listener);
-	}
+    return newListeners;
+  }
 
-	dispatchEvent(event: UIEvent) {
-		const listeners = this._eventListeners.get(event.type);
-		if (listeners) {
-			for (const fn of listeners) {
-				fn.call(this, event);
-			}
-		}
+  addEventListener<E extends keyof UIEventMap>(
+    type: E,
+    listener: UIEventListener<E>,
+  ): () => void {
+    const listeners = this.getEventListeners(type);
+    listeners.add(listener);
 
-		if (!event.propagationStopped) {
-			this.parentNode?.dispatchEvent(event);
-		}
-	}
+    return () => listeners.delete(listener);
+  }
 
-	appendChild(node: UINode): UINode {
-		node.parentNode = this;
-		this.childNodes.push(node);
-		return node;
-	}
+  removeEventListener<E extends keyof UIEventMap>(
+    type: E,
+    listener: UIEventListener<E>,
+  ): void {
+    this.eventListeners.get(type)?.delete(listener);
+  }
 
-	removeChild(child: UINode): UINode {
-		const idx = this.childNodes.indexOf(child);
+  dispatchEvent(event: UIEvent) {
+    const listeners = this.eventListeners.get(event.type);
 
-		if (idx >= 0) {
-			this.childNodes.splice(idx, 1);
-		}
+    if (listeners) {
+      for (const fn of listeners) {
+        fn.call(this, event);
+      }
+    }
 
-		child.parentNode = null;
-		return child;
-	}
+    if (!event.propagationStopped) {
+      this.parentNode?.dispatchEvent(event);
+    }
+  }
 
-	prepend(node: UINode): UINode {
-		node.parentNode = this;
-		this.childNodes.unshift(node);
-		return node;
-	}
+  appendChild(node: UINode): UINode {
+    node.parentNode = this;
+    this.childNodes.push(node);
+    return node;
+  }
+
+  removeChild(child: UINode): UINode {
+    const idx = this.childNodes.indexOf(child);
+
+    if (idx >= 0) {
+      this.childNodes.splice(idx, 1);
+    }
+
+    child.parentNode = null;
+    return child;
+  }
+
+  prepend(node: UINode): UINode {
+    node.parentNode = this;
+    this.childNodes.unshift(node);
+    return node;
+  }
+
+  abstract toJSON(): unknown;
 }

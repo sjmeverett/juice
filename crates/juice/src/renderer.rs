@@ -10,7 +10,7 @@ use rquickjs::{
     CatchResultExt, Ctx, Function, Object, Persistent,
     prelude::{Func, MutFn},
 };
-use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use taffy::NodeId;
 
 use crate::{
@@ -32,26 +32,8 @@ pub struct Renderer {
     setup: Rc<dyn Fn(Ctx)>,
 }
 
-pub enum EventName {
-    PressIn,
-    PressOut,
-}
-
-impl fmt::Display for EventName {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                EventName::PressIn => "PressIn",
-                EventName::PressOut => "PressOut",
-            }
-        )
-    }
-}
-
 impl Renderer {
-    pub fn new(
+    pub async fn new(
         setup: impl Fn(Ctx) + 'static,
         canvas: Canvas,
         fonts: HashMap<String, Font>,
@@ -61,7 +43,7 @@ impl Renderer {
         let setup2 = setup.clone();
 
         let renderer = Self {
-            engine: Engine::new(move |ctx| setup2(ctx)),
+            engine: Engine::new(move |ctx| setup2(ctx)).await,
             canvas,
             fonts: Rc::new(RefCell::new(fonts)),
             base_style,
@@ -71,15 +53,18 @@ impl Renderer {
             setup,
         };
 
-        renderer.engine.with_context(|ctx| {
-            renderer.register(&ctx);
-        });
+        renderer
+            .engine
+            .with_context(|ctx| {
+                renderer.register(&ctx);
+            })
+            .await;
 
         renderer
     }
 
-    pub fn tick(&self) {
-        self.engine.tick();
+    pub async fn tick(&self) {
+        self.engine.tick().await;
     }
 
     pub fn flush(&self, display: &mut impl DrawTarget<Color = Rgb888>) {
@@ -98,8 +83,6 @@ impl Renderer {
         let canvas_width = self.canvas.width as f32;
         let canvas_height = self.canvas.height as f32;
 
-        // register the globalThis.renderer object
-        // it has a single method: update(content: string, eventCallback: (nodeId, event) => void)
         renderer
             .set(
                 "update",
@@ -159,9 +142,15 @@ impl Renderer {
     pub fn render(&mut self) -> bool {
         if *self.should_update.borrow() {
             let dom_ref = self.dom.borrow();
-
             if let Some(dom) = dom_ref.as_ref() {
-                render_node(dom, &mut self.canvas, &*self.fonts.borrow(), dom.root_id, 0.0, 0.0);
+                render_node(
+                    dom,
+                    &mut self.canvas,
+                    &*self.fonts.borrow(),
+                    dom.root_node_id,
+                    0.0,
+                    0.0,
+                );
             }
 
             *self.should_update.borrow_mut() = false;
@@ -171,46 +160,68 @@ impl Renderer {
         }
     }
 
-    pub fn press_event(&self, x: f32, y: f32, event_name: EventName) {
-        let callback = self.event_callback.borrow().clone();
+    pub async fn dispatch_event(
+        &self,
+        node_id: u32,
+        event_name: &str,
+        build_details: impl FnOnce(Ctx, &Object),
+    ) {
+        let Some(callback) = self.event_callback.borrow().clone() else {
+            eprintln!("Could not borrow callback");
+            return;
+        };
+
+        self.engine
+            .with_context(|ctx| {
+                let event = Object::new(ctx.clone()).unwrap();
+                event.set("type", event_name.to_string()).unwrap();
+
+                let details = Object::new(ctx.clone()).unwrap();
+                build_details(ctx.clone(), &details);
+                event.set("details", details).unwrap();
+
+                let callback = callback.restore(&ctx).unwrap();
+
+                if let Err(err) = callback.call::<_, ()>((node_id, event)).catch(&ctx) {
+                    eprintln!("Error calling event callback: {}", err)
+                }
+
+                while ctx.execute_pending_job() {}
+            })
+            .await;
+    }
+
+    pub async fn dispatch_xy_event(&self, event_name: &str, x: f32, y: f32) {
         let node_id = self
             .dom
             .borrow()
             .as_ref()
             .and_then(|dom| dom.node_at_point(x, y));
 
-        if let Some(callback) = callback
-            && let Some(node_id) = node_id
-        {
-            self.engine.with_context(|ctx| {
-                let event = Object::new(ctx.clone()).unwrap();
-                event.set("type", event_name.to_string()).unwrap();
+        let Some(node_id) = node_id else {
+            return;
+        };
 
-                let details = Object::new(ctx.clone()).unwrap();
-                details.set("x", x).unwrap();
-                details.set("y", y).unwrap();
-
-                event.set("details", details).unwrap();
-
-                let callback = callback.restore(&ctx).unwrap();
-                let _ = callback.call::<_, ()>((node_id, event)).catch(&ctx);
-
-                while ctx.execute_pending_job() {}
-            });
-        }
+        self.dispatch_event(node_id, event_name, |_ctx, details| {
+            details.set("x", x).unwrap();
+            details.set("y", y).unwrap();
+        })
+        .await;
     }
 
-    pub fn reload(&mut self, js: &str) {
+    pub async fn reload(&mut self, js: &str) {
         self.event_callback.borrow_mut().take();
 
         let setup = self.setup.clone();
-        self.engine = Engine::new(move |ctx| setup(ctx));
+        self.engine = Engine::new(move |ctx| setup(ctx)).await;
 
-        self.engine.with_context(|ctx| {
-            self.register(&ctx);
-        });
+        self.engine
+            .with_context(|ctx| {
+                self.register(&ctx);
+            })
+            .await;
 
-        self.engine.load(js);
+        self.engine.load(js).await;
     }
 }
 
@@ -267,9 +278,21 @@ fn render_node(
             color,
             font_name,
             font_size,
+            text_align,
+            wrap_width,
         }) => {
             if let Some(font) = fonts.get(font_name) {
-                canvas.draw_text(font, content, *font_size, *color, x, y);
+                canvas.draw_text(
+                    font,
+                    content,
+                    *font_size,
+                    *color,
+                    x,
+                    y,
+                    *wrap_width,
+                    *text_align,
+                    w,
+                );
             }
         }
 
@@ -327,7 +350,6 @@ fn render_node(
 
             if !data.is_empty() && *img_width > 0 && *img_height > 0 && render_w > 0 && render_h > 0
             {
-                // If dimensions match, blit directly; otherwise resize
                 if *img_width == render_w && *img_height == render_h {
                     canvas.blit_rgba(data, *img_width, *img_height, x as i32, y as i32);
                 } else if let Some(src_img) =

@@ -6,51 +6,59 @@ import { UISvgElement } from "./UISvgElement.js";
 import { UITextNode } from "./UITextNode.js";
 
 export class UIDocument extends UIElement {
-	constructor() {
-		super("document");
+  constructor() {
+    super("document");
 
-		let pressedNode: UINode | undefined;
+    let pressedNode: UINode | undefined;
 
-		this.addEventListener("PressIn", (event) => {
-			pressedNode = event.target;
-		});
+    this.addEventListener("PressIn", (event) => {
+      pressedNode = event.target;
+    });
 
-		this.addEventListener("PressOut", (event) => {
-			if (pressedNode?.contains(event.target)) {
-				pressedNode.dispatchEvent(
-					new PressEvent(
-						"Press",
-						pressedNode,
-						event.details as { x: number; y: number },
-					),
-				);
-			}
+    this.addEventListener("PressOut", (event) => {
+      if (pressedNode?.contains(event.target)) {
+        pressedNode.dispatchEvent(
+          new PressEvent(
+            "Press",
+            pressedNode,
+            event.details as { x: number; y: number },
+          ),
+        );
+      }
 
-			pressedNode = undefined;
-		});
-	}
+      pressedNode = undefined;
+    });
+  }
 
-	createElement(tagName: string): UIElement {
-		return this.createElementNS(UIElement.namespace, tagName)
-	}
+  createElement(tagName: string): UIElement {
+    return this.createElementNS(UIElement.namespace, tagName);
+  }
 
-	createElementNS(namespaceURI: string, tagName: string): UIElement {
-		if (namespaceURI === UISvgElement.namespace) {
-			return new UISvgElement(tagName);
-		} else if (tagName === "img") {
-			return new UIImageElement();
-		}
-		return new UIElement(tagName, namespaceURI);
-	}
+  createElementNS(namespaceURI: string, tagName: string): UIElement {
+    if (namespaceURI === UISvgElement.namespace) {
+      return new UISvgElement(tagName);
+    } else if (tagName === "img") {
+      return new UIImageElement();
+    }
+    return new UIElement(tagName, namespaceURI);
+  }
 
-	createTextNode(text: string): UITextNode {
-		return new UITextNode(text);
-	}
+  createTextNode(text: string): UITextNode {
+    return new UITextNode(text);
+  }
 
-	get documentElement(): UIElement {
-		return this;
-	}
+  get documentElement(): UIElement {
+    return this;
+  }
 }
 
 export const document = new UIDocument();
 (globalThis as unknown as { document: UIDocument }).document = document;
+
+declare global {
+  interface DocumentEventMap {
+    PressIn: PressEvent;
+    PressOut: PressEvent;
+    Press: PressEvent;
+  }
+}

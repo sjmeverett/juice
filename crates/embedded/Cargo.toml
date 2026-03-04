@@ -4,14 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+juice-dev = { path = "../juice-dev", optional = true }
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "net"] }
 juice = { path = "../juice" }
 embedded-graphics = "0.8"
 fontdue = "0.9"
-rquickjs = { version = "0.11", features = ["macro", "bindgen"] }
+rquickjs = { version = "0.11", features = ["macro", "bindgen", "futures"] }
 drm = "0.14"
 evdev = "0.13"
 libc = "0.2"
-juice-dev = { path = "../juice-dev", optional = true }
 
 [features]
 hotreload = ["juice-dev"]

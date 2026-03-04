@@ -1,10 +1,19 @@
 use crate::canvas::RgbColor;
 
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum TextAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
 #[derive(Clone)]
 pub struct InheritedStyle {
     pub color: RgbColor,
     pub font_name: String,
     pub font_size: f32,
+    pub text_align: TextAlign,
 }
 
 impl InheritedStyle {
@@ -17,6 +26,7 @@ impl InheritedStyle {
             },
             font_name: default_font.to_string(),
             font_size: 24.0,
+            text_align: TextAlign::default(),
         }
     }
 
@@ -25,6 +35,7 @@ impl InheritedStyle {
         color: Option<RgbColor>,
         font_name: Option<String>,
         font_size: Option<f32>,
+        text_align: Option<TextAlign>,
     ) -> Self {
         let mut cloned = self.clone();
 
@@ -38,6 +49,10 @@ impl InheritedStyle {
 
         if let Some(font_size) = font_size {
             cloned.font_size = font_size;
+        }
+
+        if let Some(text_align) = text_align {
+            cloned.text_align = text_align;
         }
 
         cloned

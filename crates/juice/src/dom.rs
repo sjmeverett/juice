@@ -1,15 +1,20 @@
 use fontdue::Font;
+use fontdue::layout::{CoordinateSystem, Layout as TextLayout, LayoutSettings, TextStyle};
 use serde::Deserialize;
 use std::collections::HashMap;
 use taffy::{
-    AlignItems, AlignSelf, AvailableSpace, Dimension, Display, FlexDirection, Layout,
+    AlignContent, AlignItems, AlignSelf, AvailableSpace, Dimension, Display, FlexDirection, Layout,
     LengthPercentage, LengthPercentageAuto, NodeId, Rect, Size, Style, TaffyTree,
 };
 
-use crate::{canvas::RgbColor, inherited_style::InheritedStyle};
+use crate::{
+    canvas::RgbColor,
+    inherited_style::{InheritedStyle, TextAlign},
+};
 
 pub struct Dom {
-    pub root_id: NodeId,
+    pub root_node_id: NodeId,
+    pub root_id: Option<u32>,
     pub tree: TaffyTree<NodeContext>,
 }
 
@@ -23,6 +28,12 @@ impl Dom {
     ) -> Result<Self, serde_json::Error> {
         let content: Node = serde_json::from_str(content_json)?;
 
+        let root_id = if let Node::Element { id, .. } = content {
+            id
+        } else {
+            None
+        };
+
         let mut tree = TaffyTree::new();
         let root = build_node(&mut tree, &content, &mut inherited_style);
 
@@ -32,30 +43,76 @@ impl Dom {
                 width: AvailableSpace::Definite(width),
                 height: AvailableSpace::Definite(height),
             },
-            |known_size, _available_space, _node_id, context, _style| {
+            |known_size, available_space, _node_id, context, _style| {
                 if let Some(NodeContext::Text {
                     content,
                     font_name,
                     font_size,
+                    wrap_width,
                     ..
                 }) = context
                 {
                     let fs = *font_size;
+
                     if let Some(font) = fonts.get(font_name) {
-                        let w = known_size.width.unwrap_or_else(|| {
-                            content
-                                .chars()
-                                .map(|c| font.metrics(c, fs).advance_width)
-                                .sum()
+                        // Use advance widths for accurate measurement (not glyph bitmap extents)
+                        let single_line_width: f32 = content
+                            .chars()
+                            .map(|c| font.metrics(c, fs).advance_width)
+                            .sum();
+
+                        let line_height = font
+                            .horizontal_line_metrics(fs)
+                            .map(|m| m.ascent - m.descent + m.line_gap)
+                            .unwrap_or(fs);
+
+                        let constraint = known_size.width.or(match available_space.width {
+                            AvailableSpace::Definite(w) => Some(w),
+                            _ => None,
                         });
-                        let h = known_size.height.unwrap_or_else(|| {
-                            font.horizontal_line_metrics(fs)
-                                .map(|m| m.ascent - m.descent + m.line_gap)
-                                .unwrap_or(fs)
-                        });
-                        Size {
-                            width: w,
-                            height: h,
+
+                        // Only wrap if the text actually overflows the constraint
+                        let needs_wrap = constraint.map_or(false, |c| single_line_width > c);
+
+                        if needs_wrap {
+                            let max_w = constraint.unwrap();
+
+                            let mut text_layout = TextLayout::new(CoordinateSystem::PositiveYDown);
+
+                            text_layout.reset(&LayoutSettings {
+                                max_width: Some(max_w),
+                                ..LayoutSettings::default()
+                            });
+
+                            text_layout.append(
+                                std::slice::from_ref(font),
+                                &TextStyle::new(content, fs, 0),
+                            );
+
+                            let glyphs = text_layout.glyphs();
+
+                            let h = known_size.height.unwrap_or_else(|| {
+                                if glyphs.is_empty() {
+                                    line_height
+                                } else {
+                                    let last_line_y =
+                                        glyphs.iter().map(|g| g.y).fold(0.0f32, f32::max);
+                                    last_line_y + line_height
+                                }
+                            });
+
+                            *wrap_width = Some(max_w);
+
+                            Size {
+                                width: known_size.width.unwrap_or(max_w),
+                                height: h,
+                            }
+                        } else {
+                            *wrap_width = None;
+                            Size {
+                                width: known_size.width.unwrap_or(single_line_width),
+                                height: known_size.height.unwrap_or(line_height),
+                            }
                         }
                     } else {
                         Size::ZERO
@@ -68,13 +125,14 @@ impl Dom {
         .unwrap();
 
         Ok(Self {
-            root_id: root,
+            root_node_id: root,
+            root_id,
             tree,
         })
     }
 
     pub fn node_at_point(&self, x: f32, y: f32) -> Option<u32> {
-        self._node_at_point(self.root_id, x, y, 0.0, 0.0)
+        self._node_at_point(self.root_node_id, x, y, 0.0, 0.0)
     }
 
     pub fn get_layout(&self, node_id: NodeId) -> Option<&Layout> {
@@ -148,10 +206,22 @@ fn build_node(
                 color: inherited_style.color,
                 font_name: inherited_style.font_name.clone(),
                 font_size: inherited_style.font_size,
+                text_align: inherited_style.text_align,
+                wrap_width: None,
             };
 
-            tree.new_leaf_with_context(Style::default(), context)
-                .unwrap()
+            tree.new_leaf_with_context(
+                Style {
+                    flex_grow: 1.0,
+                    min_size: Size {
+                        width: Dimension::length(0.0),
+                        height: Dimension::length(0.0),
+                    },
+                    ..Style::default()
+                },
+                context,
+            )
+            .unwrap()
         }
 
         Node::Svg {
@@ -235,15 +305,25 @@ fn build_node(
             gap,
             height,
             id,
+            justify_content,
+            justify_self,
             margin,
             padding,
+            text_align,
             width,
-            ..
         } => {
+            let text_align = match text_align.as_deref() {
+                Some("center") => Some(TextAlign::Center),
+                Some("right") => Some(TextAlign::Right),
+                Some("left") => Some(TextAlign::Left),
+                _ => None,
+            };
+
             let mut child_style = inherited_style.clone_and_override(
                 color.map(RgbColor::from_array),
                 font.clone(),
                 *font_size,
+                text_align,
             );
 
             let child_ids: Vec<NodeId> = children
@@ -275,6 +355,22 @@ fn build_node(
                 },
                 flex_grow: flex_grow.unwrap_or(0.0),
                 flex_shrink: flex_shrink.unwrap_or(1.0),
+                justify_content: match justify_content.as_deref() {
+                    Some("flex-start") => Some(AlignContent::FlexStart),
+                    Some("center") => Some(AlignContent::Center),
+                    Some("flex-end") => Some(AlignContent::FlexEnd),
+                    Some("stretch") => Some(AlignContent::Stretch),
+                    Some("space-between") => Some(AlignContent::SpaceBetween),
+                    Some("space-around") => Some(AlignContent::SpaceAround),
+                    _ => None,
+                },
+                justify_self: match justify_self.as_deref() {
+                    Some("flex-start") => Some(AlignSelf::FlexStart),
+                    Some("center") => Some(AlignSelf::Center),
+                    Some("flex-end") => Some(AlignSelf::FlexEnd),
+                    Some("stretch") => Some(AlignSelf::Stretch),
+                    _ => None,
+                },
                 size: Size {
                     width: parse_dimension(width, inherited_style.font_size),
                     height: parse_dimension(height, inherited_style.font_size),
@@ -366,6 +462,10 @@ pub enum Node {
         flex_grow: Option<f32>,
         #[serde(default, rename = "flexShrink")]
         flex_shrink: Option<f32>,
+        #[serde(default, rename = "justifyContent")]
+        justify_content: Option<String>,
+        #[serde(default, rename = "justifySelf")]
+        justify_self: Option<String>,
         #[serde(default)]
         width: String,
         #[serde(default)]
@@ -376,6 +476,8 @@ pub enum Node {
         margin: Option<[f32; 4]>,
         #[serde(default)]
         gap: Option<f32>,
+        #[serde(default, rename = "textAlign")]
+        text_align: Option<String>,
         #[serde(default)]
         children: Vec<Node>,
     },
@@ -416,6 +518,8 @@ pub enum NodeContext {
         color: RgbColor,
         font_name: String,
         font_size: f32,
+        text_align: TextAlign,
+        wrap_width: Option<f32>,
     },
     Svg {
         markup: String,

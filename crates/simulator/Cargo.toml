@@ -8,5 +8,6 @@ juice = { path = "../juice" }
 embedded-graphics = "0.8"
 embedded-graphics-simulator = "0.8"
 fontdue = "0.9"
-rquickjs = { version = "0.11", features = ["macro", "bindgen"] }
+rquickjs = { version = "0.11", features = ["macro", "bindgen", "futures"] }
 juice-dev = { path = "../juice-dev" }
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "net"] }

@@ -1,5 +1,6 @@
 use evdev::{AbsoluteAxisCode, Device, EventSummary, KeyCode};
 use std::{fs::read_dir, os::unix::io::AsRawFd};
+use tokio::io::unix::AsyncFd;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TouchState {
@@ -16,14 +17,16 @@ pub enum TouchEvent {
 }
 
 pub struct InputDevice {
-    device: Device,
+    async_fd: AsyncFd<Device>,
     pub touch_state: TouchState,
 }
 
 impl InputDevice {
     pub fn new(device: Device) -> Self {
+        set_nonblocking(&device);
+
         Self {
-            device,
+            async_fd: AsyncFd::new(device).unwrap(),
             touch_state: TouchState {
                 x: 0,
                 y: 0,
@@ -32,7 +35,9 @@ impl InputDevice {
         }
     }
 
-    pub fn all_devices() -> impl Iterator<Item = Self> {
+    pub fn get_touchscreen_device() -> Option<Self> {
+        // Check for touchscreen capability before wrapping in AsyncFd,
+        // since we need to inspect the device first
         read_dir("/dev/input")
             .into_iter()
             .flatten()
@@ -41,41 +46,31 @@ impl InputDevice {
                 let device = Device::open(&path).ok()?;
                 let name = device.name().unwrap_or("Unknown");
                 println!("  Device: {} at {:?}", name, path);
-                Some(Self::new(device))
+
+                if is_touchscreen(&device) {
+                    Some(Self::new(device))
+                } else {
+                    None
+                }
             })
+            .next()
     }
 
-    pub fn get_touchscreen_device() -> Option<Self> {
-        Self::all_devices().find(|dev| dev.is_touchscreen_device())
-    }
+    pub async fn next_event(&mut self) -> TouchEvent {
+        loop {
+            self.async_fd.readable().await.unwrap().clear_ready();
 
-    pub fn is_touchscreen_device(&self) -> bool {
-        if let Some(axes) = self.device.supported_absolute_axes() {
-            (axes.contains(AbsoluteAxisCode::ABS_X) && axes.contains(AbsoluteAxisCode::ABS_Y))
-                || (axes.contains(AbsoluteAxisCode::ABS_MT_POSITION_X)
-                    && axes.contains(AbsoluteAxisCode::ABS_MT_POSITION_Y))
-        } else {
-            false
+            if let Some(event) = self.read_touch_event() {
+                return event;
+            }
         }
     }
 
-    pub fn set_nonblocking(&self) {
-        unsafe {
-            let flags = libc::fcntl(self.device.as_raw_fd(), libc::F_GETFL, 0);
-
-            libc::fcntl(
-                self.device.as_raw_fd(),
-                libc::F_SETFL,
-                flags | libc::O_NONBLOCK,
-            );
-        }
-    }
-
-    pub fn read_touch_state(&mut self) -> Option<TouchState> {
-        let mut touch_state = self.touch_state.clone();
+    fn read_touch_state(&mut self) -> Option<TouchState> {
+        let mut touch_state = self.touch_state;
         let mut has_event = false;
 
-        while let Ok(events) = self.device.fetch_events() {
+        while let Ok(events) = self.async_fd.get_mut().fetch_events() {
             for event in events {
                 match event.destructure() {
                     EventSummary::AbsoluteAxis(_, AbsoluteAxisCode::ABS_X, val) => {
@@ -107,7 +102,7 @@ impl InputDevice {
         if has_event { Some(touch_state) } else { None }
     }
 
-    pub fn read_touch_event(&mut self) -> Option<TouchEvent> {
+    fn read_touch_event(&mut self) -> Option<TouchEvent> {
         let touch_state = self.read_touch_state()?;
 
         let result = if touch_state.pressed && !self.touch_state.pressed {
@@ -131,5 +126,22 @@ impl InputDevice {
 
         self.touch_state = touch_state;
         result
+    }
+}
+
+fn set_nonblocking(device: &Device) {
+    unsafe {
+        let flags = libc::fcntl(device.as_raw_fd(), libc::F_GETFL, 0);
+        libc::fcntl(device.as_raw_fd(), libc::F_SETFL, flags | libc::O_NONBLOCK);
+    }
+}
+
+fn is_touchscreen(device: &Device) -> bool {
+    if let Some(axes) = device.supported_absolute_axes() {
+        (axes.contains(AbsoluteAxisCode::ABS_X) && axes.contains(AbsoluteAxisCode::ABS_Y))
+            || (axes.contains(AbsoluteAxisCode::ABS_MT_POSITION_X)
+                && axes.contains(AbsoluteAxisCode::ABS_MT_POSITION_Y))
+    } else {
+        false
     }
 }

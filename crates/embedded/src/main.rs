@@ -2,8 +2,8 @@ mod drm;
 mod input;
 
 use juice::canvas::{Canvas, RgbColor};
-use juice::inherited_style::InheritedStyle;
-use juice::renderer::{EventName, Renderer};
+use juice::inherited_style::{InheritedStyle, TextAlign};
+use juice::renderer::Renderer;
 use rquickjs::Object;
 use rquickjs::function::Func;
 use std::collections::HashMap;
@@ -11,7 +11,8 @@ use std::time::Duration;
 
 use crate::input::{InputDevice, TouchEvent};
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fonts = HashMap::new();
 
     #[cfg(feature = "hotreload")]
@@ -20,6 +21,7 @@ fn main() {
     // Hardware init
     let mut display =
         drm::DrmDisplay::new("/dev/dri/card0").expect("Failed to initialize DRM display");
+
     let display_width = display.width();
     let display_height = display.height();
 
@@ -49,40 +51,44 @@ fn main() {
             color: RgbColor::from_array([255, 255, 255]),
             font_name: default_font.to_string(),
             font_size: 24.0,
+            text_align: TextAlign::Left,
         },
-    );
+    )
+    .await;
 
-    #[cfg(debug_assertions)]
-    let bundle = std::fs::read_to_string("dist/bundle.js").expect("Run 'npm run build' first");
-    #[cfg(not(debug_assertions))]
     let bundle = include_str!("../../../dist/bundle.js").to_string();
 
-    renderer.engine.load(&bundle);
+    renderer.engine.load(&bundle).await;
 
-    // Touch input
+    // set up touchscreen input
     let mut touch_device = InputDevice::get_touchscreen_device();
 
-    if let Some(ref mut touch_device) = touch_device {
-        touch_device.set_nonblocking();
-    } else {
+    if touch_device.is_none() {
         println!("Warning: No touchscreen device found");
     }
 
+    let mut frame_interval = tokio::time::interval(Duration::from_millis(16));
+
     // Event loop
     loop {
-        if let Some(ref mut touch_device) = touch_device {
-            match touch_device.read_touch_event() {
-                Some(TouchEvent::PressIn { x, y }) => {
-                    renderer.press_event(x as f32, y as f32, EventName::PressIn);
+        // Wait for a frame tick, WS message, or touch event
+        tokio::select! {
+            _ = frame_interval.tick() => {}
+
+            event = async { touch_device.as_mut().unwrap().next_event().await }, if touch_device.is_some() => {
+                match event {
+                    TouchEvent::PressIn { x, y } => {
+                        renderer.dispatch_xy_event("PressIn", x as f32, y as f32).await;
+                    }
+                    TouchEvent::PressOut { x, y } => {
+                        renderer.dispatch_xy_event("PressOut", x as f32, y as f32).await;
+                    }
+                    _ => {}
                 }
-                Some(TouchEvent::PressOut { x, y }) => {
-                    renderer.press_event(x as f32, y as f32, EventName::PressOut);
-                }
-                _ => {}
             }
         }
 
-        renderer.tick();
+        renderer.tick().await;
 
         if renderer.render() {
             display.blit_from(&renderer.canvas);
@@ -91,9 +97,7 @@ fn main() {
         #[cfg(feature = "hotreload")]
         if let Ok(new_bundle) = reload_rx.try_recv() {
             println!("[dev] reloading bundle...");
-            renderer.reload(&new_bundle);
+            renderer.reload(&new_bundle).await;
         }
-
-        std::thread::sleep(Duration::from_millis(16));
     }
 }

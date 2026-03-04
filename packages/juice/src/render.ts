@@ -6,7 +6,7 @@ import {
   render as preactRender,
 } from "preact";
 import { document } from "./UIDocument.js";
-import { PressEvent } from "./UIEvent.js";
+import { PressEvent, UIEvent } from "./UIEvent.js";
 import "preact/hooks";
 
 export type RendererEventCallback = (
@@ -29,18 +29,14 @@ export function render(app: ComponentChild) {
   const update = () => {
     const contents = JSON.stringify(document.firstChild);
 
-    // console.log(contents);
-
     renderer.update(contents, (nodeId, event) => {
       const node = document.findElementByNodeId(nodeId);
 
       if (node) {
-        node.dispatchEvent(
-          new PressEvent(
-            event.type,
-            node,
-            event.details as { x: number; y: number },
-          ),
+        node.dispatchEvent(new UIEvent(event.type, node, event.details));
+      } else {
+        console.error(
+          `Attempt to dispatch ${event.type} to non-existent node ${nodeId}`,
         );
       }
     });
