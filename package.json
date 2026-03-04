@@ -1,11 +1,14 @@
 {
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "esbuild packages/app/src/index.tsx --bundle --format=iife --outfile=dist/bundle.js --jsx=automatic --jsx-import-source=preact",
+    "build": "node build.js",
     "dev": "juice dev packages/app/src/index.tsx"
   },
   "devDependencies": {
+    "esbuild": "^0.27.3",
     "typescript": "^5.9.3"
   }
 }

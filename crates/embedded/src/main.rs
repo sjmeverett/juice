@@ -12,7 +12,7 @@ use std::time::Duration;
 use crate::input::{InputDevice, TouchEvent};
 
 fn main() {
-    let mut fonts = HashMap::new();
+    let fonts = HashMap::new();
 
     #[cfg(feature = "hotreload")]
     let reload_rx = juice_dev::spawn_reload_listener();
