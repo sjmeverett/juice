@@ -16,6 +16,19 @@ pub struct RgbColor {
 }
 
 impl RgbColor {
+    pub fn from_string(rgb: &str) -> Option<Self> {
+        let hex = rgb.strip_prefix('#')?;
+
+        if hex.len() != 6 {
+            return None;
+        }
+
+        let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+        let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+        let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+        Some(RgbColor { r, g, b })
+    }
+
     pub fn from_array(rgb: [u8; 3]) -> Self {
         RgbColor {
             r: rgb[0],
@@ -39,7 +52,7 @@ fn to_xrgb(r: u8, g: u8, b: u8) -> u32 {
 pub struct Canvas {
     pub width: u32,
     pub height: u32,
-    pixels: Vec<u32>,
+    pub pixels: Vec<u32>,
 }
 
 impl Canvas {
@@ -81,8 +94,7 @@ impl Canvas {
         }
     }
 
-    /// Flush all pixels through a DrawTarget (for simulator or other embedded-graphics displays).
-    pub fn flush(&self, display: &mut impl DrawTarget<Color = Rgb888>) {
+    pub fn draw_to_drawtarget(&self, drawable: &mut impl DrawTarget<Color = Rgb888>) {
         for y in 0..self.height {
             for x in 0..self.width {
                 let px = self.pixels[(y * self.width + x) as usize];
@@ -90,7 +102,7 @@ impl Canvas {
                     Point::new(x as i32, y as i32),
                     Rgb888::new((px >> 16) as u8, (px >> 8) as u8, px as u8),
                 )
-                .draw(display);
+                .draw(drawable);
             }
         }
     }

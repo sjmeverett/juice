@@ -1,48 +1,6 @@
-import type { UIElementProps } from "./UIElement.js";
+import type { JuiceElementProps } from "./JuiceElement.js";
 
-export interface BoxStyle {
-  alignItems?: "stretch" | "flex-start" | "center" | "flex-end";
-  alignSelf?: "stretch" | "flex-start" | "center" | "flex-end";
-  background?: string;
-  borderRadius?: number;
-  color?: string;
-  flexDirection?: "row" | "column";
-  flexGrow?: number;
-  flexShrink?: number;
-  flexBasis?: number;
-  font?: string;
-  fontSize?: number;
-  gap?: number;
-  height?: string | number;
-  justifyContent?:
-    | "stretch"
-    | "flex-start"
-    | "center"
-    | "flex-end"
-    | "space-between"
-    | "space-around";
-  justifySelf?: "stretch" | "flex-start" | "center" | "flex-end";
-  textAlign?: "left" | "center" | "right";
-  margin?: number;
-  marginBottom?: number;
-  marginLeft?: number;
-  marginRight?: number;
-  marginTop?: number;
-  marginX?: number;
-  marginY?: number;
-  padding?: number;
-  paddingBottom?: number;
-  paddingLeft?: number;
-  paddingRight?: number;
-  paddingTop?: number;
-  paddingX?: number;
-  paddingY?: number;
-  width?: string | number;
-}
-
-export interface BoxProps extends UIElementProps {
-  style?: BoxStyle;
-}
+export interface BoxProps extends JuiceElementProps {}
 
 declare module "preact" {
   namespace JSX {

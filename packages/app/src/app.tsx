@@ -1,6 +1,6 @@
 import circleImageIcon from "@iconify/icons-fluent/circle-image-24-regular.js";
 import { Box } from "@juice/core";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import Button from "./Button.js";
 import robotoBold from "./fonts/Roboto-Bold.ttf";
 import robotoRegular from "./fonts/Roboto-Regular.ttf";
@@ -15,8 +15,9 @@ export function App() {
   return (
     <Box
       style={{
-        background: "#000000",
+        display: "flex",
         flexDirection: "column",
+        background: "#000000",
         width: "100%",
         height: "100%",
         padding: 20,
@@ -26,7 +27,9 @@ export function App() {
       <Box style={{ color: "#ffffff", font: "Roboto-Bold", fontSize: 72 }}>
         Hello, World
       </Box>
+
       <Box>Count: {count}</Box>
+
       <Button
         onPress={() => {
           setCount(count + 1);
@@ -43,7 +46,7 @@ export function App() {
         }}
       >
         <Icon icon={circleImageIcon} size="1.2em" />
-        Increment
+        Add
       </Button>
     </Box>
   );

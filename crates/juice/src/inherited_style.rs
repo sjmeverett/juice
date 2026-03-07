@@ -8,7 +8,7 @@ pub enum TextAlign {
     Right,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct InheritedStyle {
     pub color: RgbColor,
     pub font_name: String,
@@ -30,31 +30,23 @@ impl InheritedStyle {
         }
     }
 
-    pub fn clone_and_override(
-        &self,
-        color: Option<RgbColor>,
-        font_name: Option<String>,
-        font_size: Option<f32>,
-        text_align: Option<TextAlign>,
-    ) -> Self {
-        let mut cloned = self.clone();
-
-        if let Some(color) = color {
-            cloned.color = color;
+    pub fn with_overrides(&self, overrides: &InheritedStyleOverrides) -> Self {
+        InheritedStyle {
+            color: overrides.color.unwrap_or(self.color),
+            font_name: overrides
+                .font_name
+                .clone()
+                .unwrap_or_else(|| self.font_name.clone()),
+            font_size: overrides.font_size.unwrap_or(self.font_size),
+            text_align: overrides.text_align.unwrap_or(self.text_align),
         }
-
-        if let Some(font_name) = font_name {
-            cloned.font_name = font_name.clone();
-        }
-
-        if let Some(font_size) = font_size {
-            cloned.font_size = font_size;
-        }
-
-        if let Some(text_align) = text_align {
-            cloned.text_align = text_align;
-        }
-
-        cloned
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct InheritedStyleOverrides {
+    pub color: Option<RgbColor>,
+    pub font_name: Option<String>,
+    pub font_size: Option<f32>,
+    pub text_align: Option<TextAlign>,
 }

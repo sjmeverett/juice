@@ -1,3 +1,5 @@
+mod console;
+
 use embedded_graphics::pixelcolor::Rgb888;
 use embedded_graphics::prelude::*;
 use embedded_graphics_simulator::{
@@ -6,10 +8,10 @@ use embedded_graphics_simulator::{
 use juice::canvas::{Canvas, RgbColor};
 use juice::inherited_style::{InheritedStyle, TextAlign};
 use juice::renderer::Renderer;
-use rquickjs::Object;
-use rquickjs::prelude::Func;
 use std::collections::HashMap;
 use std::time::Duration;
+
+use crate::console::Console;
 
 const DISPLAY_WIDTH: u32 = 800;
 const DISPLAY_HEIGHT: u32 = 800;
@@ -24,29 +26,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // create the juice renderer
     let mut renderer = Renderer::new(
-        move |ctx| {
-            let console = Object::new(ctx.clone()).unwrap();
-
-            console
-                .set(
-                    "log",
-                    Func::from(|msg: String| {
-                        println!("[JS] {}", msg);
-                    }),
-                )
-                .unwrap();
-
-            console
-                .set(
-                    "error",
-                    Func::from(|msg: String| {
-                        eprintln!("[JS] {}", msg);
-                    }),
-                )
-                .unwrap();
-
-            ctx.globals().set("console", console).unwrap();
-        },
         canvas,
         fonts,
         InheritedStyle {
@@ -55,6 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             font_size: 24.0,
             text_align: TextAlign::Left,
         },
+        vec![Box::new(Console {})],
     )
     .await;
 
@@ -64,7 +44,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     renderer.engine.load(&bundle).await;
 
     let mut display = SimulatorDisplay::<Rgb888>::new(Size::new(DISPLAY_WIDTH, DISPLAY_HEIGHT));
-    renderer.flush(&mut display);
 
     let output_settings = OutputSettingsBuilder::new().build();
     let mut window = Window::new("Preact Embedded", &output_settings);

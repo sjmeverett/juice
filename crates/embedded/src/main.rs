@@ -1,14 +1,14 @@
+mod console;
 mod drm;
 mod input;
 
 use juice::canvas::{Canvas, RgbColor};
 use juice::inherited_style::{InheritedStyle, TextAlign};
 use juice::renderer::Renderer;
-use rquickjs::Object;
-use rquickjs::function::Func;
 use std::collections::HashMap;
 use std::time::Duration;
 
+use crate::console::Console;
 use crate::input::{InputDevice, TouchEvent};
 
 #[tokio::main(flavor = "current_thread")]
@@ -31,20 +31,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let default_font = "Roboto-Regular";
 
     let mut renderer = Renderer::new(
-        |ctx| {
-            let console = Object::new(ctx.clone()).unwrap();
-
-            console
-                .set(
-                    "log",
-                    Func::from(|msg: String| {
-                        println!("[JS] {}", msg);
-                    }),
-                )
-                .unwrap();
-
-            ctx.globals().set("console", console).unwrap();
-        },
         canvas,
         fonts,
         InheritedStyle {
@@ -53,6 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             font_size: 24.0,
             text_align: TextAlign::Left,
         },
+        vec![Box::new(Console {})],
     )
     .await;
 

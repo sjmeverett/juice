@@ -149,13 +149,13 @@ impl DrmDisplay {
 
     /// Blit the framebuffer into the DRM display buffer.
     /// Both are XRGB8888, so this is a row-by-row memcpy.
+    /// If a dirty rect is provided, only those rows are copied.
     pub fn blit_from(&mut self, canvas: &Canvas) {
         let src = canvas.as_xrgb_bytes();
         let pitch = self.pitch as usize;
         let row_bytes = canvas.width as usize * 4;
         let dst = self.framebuffer_mut();
 
-        // If pitch matches width (no padding), single memcpy for the whole buffer
         if pitch == row_bytes {
             dst[..src.len()].copy_from_slice(src);
         } else {

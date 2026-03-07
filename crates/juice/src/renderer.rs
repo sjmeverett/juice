@@ -15,48 +15,44 @@ use taffy::NodeId;
 
 use crate::{
     canvas::Canvas,
-    dom::{Dom, NodeContext},
-    engine::Engine,
+    dom::{Dom, NodeKind},
+    engine::{Engine, JsModule},
     inherited_style::InheritedStyle,
 };
 
 pub struct Renderer {
     pub engine: Engine,
     pub canvas: Canvas,
-    pub dom: Rc<RefCell<Option<Dom>>>,
+    pub dom: Rc<RefCell<Dom>>,
 
+    modules: Vec<Box<dyn JsModule>>,
     fonts: Rc<RefCell<HashMap<String, Font>>>,
-    base_style: InheritedStyle,
     event_callback: Rc<RefCell<Option<Persistent<Function<'static>>>>>,
     should_update: Rc<RefCell<bool>>,
-    setup: Rc<dyn Fn(Ctx)>,
 }
 
 impl Renderer {
     pub async fn new(
-        setup: impl Fn(Ctx) + 'static,
         canvas: Canvas,
         fonts: HashMap<String, Font>,
         base_style: InheritedStyle,
+        modules: Vec<Box<dyn JsModule>>,
     ) -> Self {
-        let setup: Rc<dyn Fn(Ctx)> = Rc::new(setup);
-        let setup2 = setup.clone();
-
         let renderer = Self {
-            engine: Engine::new(move |ctx| setup2(ctx)).await,
+            engine: Engine::new(&modules).await,
             canvas,
             fonts: Rc::new(RefCell::new(fonts)),
-            base_style,
-            dom: Rc::new(RefCell::new(None)),
+            dom: Rc::new(RefCell::new(Dom::new(base_style))),
             event_callback: Rc::new(RefCell::new(None)),
             should_update: Rc::new(RefCell::new(false)),
-            setup,
+            modules,
         };
 
         renderer
             .engine
             .with_context(|ctx| {
                 renderer.register(&ctx);
+                renderer.dom.register(&ctx);
             })
             .await;
 
@@ -67,102 +63,36 @@ impl Renderer {
         self.engine.tick().await;
     }
 
-    pub fn flush(&self, display: &mut impl DrawTarget<Color = Rgb888>) {
-        self.canvas.flush(display);
-    }
-
-    fn register(&self, ctx: &Ctx<'_>) {
-        let renderer = Object::new(ctx.clone()).unwrap();
-
-        let dom_cell = self.dom.clone();
-        let should_update_cell = self.should_update.clone();
-        let event_callback_cell = self.event_callback.clone();
-        let base_style = self.base_style.clone();
-        let fonts_cell = self.fonts.clone();
-        let fonts_for_add = self.fonts.clone();
-        let canvas_width = self.canvas.width as f32;
-        let canvas_height = self.canvas.height as f32;
-
-        renderer
-            .set(
-                "update",
-                Func::from(MutFn::from(
-                    move |content: String, event_callback: Persistent<Function<'static>>| {
-                        match Dom::new(
-                            &content,
-                            base_style.clone(),
-                            &*fonts_cell.borrow(),
-                            canvas_width,
-                            canvas_height,
-                        ) {
-                            Ok(dom) => {
-                                *dom_cell.borrow_mut() = Some(dom);
-                                *should_update_cell.borrow_mut() = true;
-                                *event_callback_cell.borrow_mut() = Some(event_callback);
-                            }
-                            Err(err) => {
-                                let col = err.column();
-                                let start = col.saturating_sub(40);
-                                let end = (col + 40).min(content.len());
-                                let snippet = &content[start..end];
-                                let pointer = " ".repeat(col - start) + "^";
-                                println!(
-                                    "Error creating DOM: {}\nNear: {}\n      {}",
-                                    err, snippet, pointer
-                                );
-                            }
-                        }
-                    },
-                )),
-            )
-            .unwrap();
-
-        renderer
-            .set(
-                "addFont",
-                Func::from(MutFn::from(move |name: String, src: String| {
-                    match src.split(',').nth(1).and_then(|str| {
-                        base64::Engine::decode(&general_purpose::STANDARD, str).ok()
-                    }) {
-                        Some(data) => {
-                            let font = Font::from_bytes(data, FontSettings::default()).unwrap();
-                            fonts_for_add.borrow_mut().insert(name, font);
-                        }
-                        None => {
-                            println!("addFont: font not a valid base64 URL");
-                        }
-                    }
-                })),
-            )
-            .unwrap();
-
-        ctx.globals().set("renderer", renderer).unwrap();
+    pub fn flush(&mut self, display: &mut impl DrawTarget<Color = Rgb888>) {
+        self.canvas.draw_to_drawtarget(display);
     }
 
     pub fn render(&mut self) -> bool {
         if *self.should_update.borrow() {
-            let dom_ref = self.dom.borrow();
-            if let Some(dom) = dom_ref.as_ref() {
+            *self.should_update.borrow_mut() = false;
+
+            let mut dom = self.dom.borrow_mut();
+
+            if let Some(root) = dom.root_node_id {
                 render_node(
-                    dom,
+                    &mut dom,
                     &mut self.canvas,
                     &*self.fonts.borrow(),
-                    dom.root_node_id,
+                    root,
                     0.0,
                     0.0,
                 );
-            }
 
-            *self.should_update.borrow_mut() = false;
-            true
-        } else {
-            false
+                return true;
+            }
         }
+
+        false
     }
 
     pub async fn dispatch_event(
         &self,
-        node_id: u32,
+        node_id: u64,
         event_name: &str,
         build_details: impl FnOnce(Ctx, &Object),
     ) {
@@ -192,11 +122,7 @@ impl Renderer {
     }
 
     pub async fn dispatch_xy_event(&self, event_name: &str, x: f32, y: f32) {
-        let node_id = self
-            .dom
-            .borrow()
-            .as_ref()
-            .and_then(|dom| dom.node_at_point(x, y));
+        let node_id = self.dom.borrow().node_at_point(x, y);
 
         let Some(node_id) = node_id else {
             return;
@@ -212,12 +138,12 @@ impl Renderer {
     pub async fn reload(&mut self, js: &str) {
         self.event_callback.borrow_mut().take();
 
-        let setup = self.setup.clone();
-        self.engine = Engine::new(move |ctx| setup(ctx)).await;
+        self.engine = Engine::new(&self.modules).await;
 
         self.engine
             .with_context(|ctx| {
                 self.register(&ctx);
+                self.dom.register(&ctx);
             })
             .await;
 
@@ -232,7 +158,7 @@ impl Drop for Renderer {
 }
 
 fn render_node(
-    dom: &Dom,
+    dom: &mut Dom,
     canvas: &mut Canvas,
     fonts: &HashMap<String, Font>,
     node_id: NodeId,
@@ -246,124 +172,158 @@ fn render_node(
     let w = layout.size.width;
     let h = layout.size.height;
 
-    let context = dom.get_context(node_id);
+    let Some(ctx) = dom.get_node_mut(node_id) else {
+        return;
+    };
 
-    match context {
-        Some(NodeContext::Element {
+    let render_w = w as u32;
+    let render_h = h as u32;
+
+    match &mut ctx.kind {
+        NodeKind::Element {
             background: Some(bg),
             border_radius,
             ..
-        }) => {
+        } => {
             let color = Rgb888::new(bg.r, bg.g, bg.b);
             let style = PrimitiveStyle::with_fill(color);
 
             let rect = Rectangle::new(
                 Point::new(x as i32, y as i32),
-                Size::new(w as u32, h as u32),
+                Size::new(render_w, render_h),
             );
 
             if *border_radius > 0.0 {
                 let r = *border_radius as u32;
-
                 let _ = RoundedRectangle::new(rect, CornerRadii::new(Size::new(r, r)))
                     .into_styled(style)
                     .draw(canvas);
             } else {
                 let _ = rect.into_styled(style).draw(canvas);
             }
+            ctx.render_dirty = false;
         }
 
-        Some(NodeContext::Text {
-            content,
-            color,
-            font_name,
-            font_size,
-            text_align,
-            wrap_width,
-        }) => {
-            if let Some(font) = fonts.get(font_name) {
+        NodeKind::Text { text, wrap_width } => {
+            if let Some(font) = fonts.get(&ctx.resolved_style.font_name) {
                 canvas.draw_text(
                     font,
-                    content,
-                    *font_size,
-                    *color,
+                    text,
+                    ctx.resolved_style.font_size,
+                    ctx.resolved_style.color,
                     x,
                     y,
                     *wrap_width,
-                    *text_align,
+                    ctx.resolved_style.text_align,
                     w,
                 );
             }
+            ctx.render_dirty = false;
         }
 
-        Some(NodeContext::Svg {
-            markup,
-            inherited_color,
-            ..
-        }) => {
-            let render_w = w as u32;
-            let render_h = h as u32;
-
+        NodeKind::Svg { markup, .. } => {
             if render_w > 0 && render_h > 0 {
-                let color_hex = format!(
-                    "#{:02x}{:02x}{:02x}",
-                    inherited_color.r, inherited_color.g, inherited_color.b
-                );
+                // Use cached raster if available and not dirty
+                let needs_rasterize = ctx.render_dirty
+                    || ctx
+                        .cached_raster
+                        .as_ref()
+                        .map_or(true, |c| c.width != render_w || c.height != render_h);
 
-                let resolved = markup.replace("currentColor", &color_hex);
-                let options = resvg::usvg::Options::default();
+                if needs_rasterize {
+                    let current_color = ctx.resolved_style.with_overrides(&ctx.overrides).color;
+                    let color_hex = format!(
+                        "#{:02x}{:02x}{:02x}",
+                        current_color.r, current_color.g, current_color.b
+                    );
 
-                match Tree::from_str(&resolved, &options) {
-                    Ok(tree) => {
-                        if let Some(mut pixmap) = Pixmap::new(render_w, render_h) {
-                            let svg_size = tree.size();
-                            let sx = render_w as f32 / svg_size.width();
-                            let sy = render_h as f32 / svg_size.height();
-                            let transform = resvg::tiny_skia::Transform::from_scale(sx, sy);
+                    let resolved = markup.replace("currentColor", &color_hex);
+                    let options = resvg::usvg::Options::default();
 
-                            resvg::render(&tree, transform, &mut pixmap.as_mut());
+                    match Tree::from_str(&resolved, &options) {
+                        Ok(tree) => {
+                            if let Some(mut pixmap) = Pixmap::new(render_w, render_h) {
+                                let svg_size = tree.size();
+                                let sx = render_w as f32 / svg_size.width();
+                                let sy = render_h as f32 / svg_size.height();
+                                let transform = resvg::tiny_skia::Transform::from_scale(sx, sy);
 
-                            canvas.blit_premultiplied_rgba(
-                                pixmap.data(),
-                                render_w,
-                                render_h,
-                                x as i32,
-                                y as i32,
-                            );
+                                resvg::render(&tree, transform, &mut pixmap.as_mut());
+
+                                let data = pixmap.data().to_vec();
+                                canvas.blit_premultiplied_rgba(
+                                    &data, render_w, render_h, x as i32, y as i32,
+                                );
+                                ctx.cached_raster = Some(crate::dom::CachedRaster {
+                                    data,
+                                    width: render_w,
+                                    height: render_h,
+                                });
+                            }
+                        }
+                        Err(err) => {
+                            println!("Error parsing SVG: {:?}", err);
                         }
                     }
-                    Err(err) => {
-                        println!("Error parsing SVG: {:?}", err);
-                    }
+                } else if let Some(cache) = &ctx.cached_raster {
+                    canvas.blit_premultiplied_rgba(
+                        &cache.data,
+                        cache.width,
+                        cache.height,
+                        x as i32,
+                        y as i32,
+                    );
                 }
             }
+            ctx.render_dirty = false;
         }
 
-        Some(NodeContext::Image {
+        NodeKind::Image {
             data,
             img_width,
             img_height,
             ..
-        }) => {
-            let render_w = w as u32;
-            let render_h = h as u32;
-
+        } => {
             if !data.is_empty() && *img_width > 0 && *img_height > 0 && render_w > 0 && render_h > 0
             {
-                if *img_width == render_w && *img_height == render_h {
-                    canvas.blit_rgba(data, *img_width, *img_height, x as i32, y as i32);
-                } else if let Some(src_img) =
-                    image::RgbaImage::from_raw(*img_width, *img_height, data.clone())
-                {
-                    let resized = image::imageops::resize(
-                        &src_img,
-                        render_w,
-                        render_h,
-                        image::imageops::FilterType::Triangle,
-                    );
-                    canvas.blit_rgba(resized.as_raw(), render_w, render_h, x as i32, y as i32);
+                // Use cached raster if available and not dirty
+                let needs_rasterize = ctx.render_dirty
+                    || ctx
+                        .cached_raster
+                        .as_ref()
+                        .map_or(true, |c| c.width != render_w || c.height != render_h);
+
+                if needs_rasterize {
+                    if *img_width == render_w && *img_height == render_h {
+                        // No resize needed, blit directly and cache the raw data
+                        canvas.blit_rgba(data, *img_width, *img_height, x as i32, y as i32);
+                        ctx.cached_raster = Some(crate::dom::CachedRaster {
+                            data: data.clone(),
+                            width: render_w,
+                            height: render_h,
+                        });
+                    } else if let Some(src_img) =
+                        image::RgbaImage::from_raw(*img_width, *img_height, data.clone())
+                    {
+                        let resized = image::imageops::resize(
+                            &src_img,
+                            render_w,
+                            render_h,
+                            image::imageops::FilterType::Triangle,
+                        );
+                        let resized_data = resized.into_raw();
+                        canvas.blit_rgba(&resized_data, render_w, render_h, x as i32, y as i32);
+                        ctx.cached_raster = Some(crate::dom::CachedRaster {
+                            data: resized_data,
+                            width: render_w,
+                            height: render_h,
+                        });
+                    }
+                } else if let Some(cache) = &ctx.cached_raster {
+                    canvas.blit_rgba(&cache.data, cache.width, cache.height, x as i32, y as i32);
                 }
             }
+            ctx.render_dirty = false;
         }
 
         _ => {}
@@ -373,5 +333,54 @@ fn render_node(
         for child_id in children {
             render_node(dom, canvas, fonts, child_id, x, y);
         }
+    }
+}
+
+impl JsModule for Renderer {
+    fn register(&self, ctx: &Ctx<'_>) {
+        let renderer = Object::new(ctx.clone()).unwrap();
+
+        let dom_cell = self.dom.clone();
+        let should_update_cell = self.should_update.clone();
+        let event_callback_cell = self.event_callback.clone();
+        let fonts_cell = self.fonts.clone();
+        let fonts_for_add = self.fonts.clone();
+        let canvas_width = self.canvas.width as f32;
+        let canvas_height = self.canvas.height as f32;
+
+        renderer
+            .set(
+                "update",
+                Func::from(MutFn::from(
+                    move |event_callback: Persistent<Function<'static>>| {
+                        let mut dom = dom_cell.borrow_mut();
+                        dom.compute_layout(&*fonts_cell.borrow(), canvas_width, canvas_height);
+                        *should_update_cell.borrow_mut() = true;
+                        *event_callback_cell.borrow_mut() = Some(event_callback);
+                    },
+                )),
+            )
+            .unwrap();
+
+        renderer
+            .set(
+                "addFont",
+                Func::from(MutFn::from(move |name: String, src: String| {
+                    match src.split(',').nth(1).and_then(|str| {
+                        base64::Engine::decode(&general_purpose::STANDARD, str).ok()
+                    }) {
+                        Some(data) => {
+                            let font = Font::from_bytes(data, FontSettings::default()).unwrap();
+                            fonts_for_add.borrow_mut().insert(name, font);
+                        }
+                        None => {
+                            println!("addFont: font not a valid base64 URL");
+                        }
+                    }
+                })),
+            )
+            .unwrap();
+
+        ctx.globals().set("renderer", renderer).unwrap();
     }
 }

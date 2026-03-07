@@ -7,8 +7,12 @@ pub struct Engine {
     timers: Timers,
 }
 
+pub trait JsModule {
+    fn register(&self, ctx: &Ctx<'_>);
+}
+
 impl Engine {
-    pub async fn new(setup: impl FnOnce(Ctx)) -> Self {
+    pub async fn new(modules: &[Box<dyn JsModule>]) -> Self {
         let js_runtime = AsyncRuntime::new().unwrap();
         let js_context = AsyncContext::full(&js_runtime).await.unwrap();
         let timers = Timers::new();
@@ -16,7 +20,7 @@ impl Engine {
         js_context
             .with(|ctx| {
                 timers.register(&ctx);
-                setup(ctx);
+                modules.iter().for_each(|module| module.register(&ctx));
             })
             .await;
 
@@ -29,6 +33,10 @@ impl Engine {
 
     pub async fn with_context<R>(&self, f: impl FnOnce(Ctx) -> R) -> R {
         self.js_context.with(f).await
+    }
+
+    pub async fn add_module(&self, module: impl JsModule) {
+        self.with_context(|ctx| module.register(&ctx)).await
     }
 
     /// Get the async context, for use with `rquickjs::async_with!`.

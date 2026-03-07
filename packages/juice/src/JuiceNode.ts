@@ -1,21 +1,26 @@
-import type { UIEvent, UIEventListener, UIEventMap } from "./UIEvent.js";
+import type { JuiceEvent, UIEventListener, UIEventMap } from "./JuiceEvent.js";
 
-export abstract class UINode {
+export class JuiceNode {
   public readonly nodeType: number;
-  public readonly namespaceURI: string | null;
-  public readonly childNodes: UINode[];
+  public readonly namespaceURI: string | undefined;
+  public readonly childNodes: JuiceNode[];
 
-  public id?: number;
-  public parentNode: UINode | null;
+  public parentNode: JuiceNode | null;
+  public nodeId: number | undefined = undefined;
 
   private eventListeners: Map<string, Set<Function>> = new Map();
 
   public static ELEMENT_NODE = 1;
   public static TEXT_NODE = 3;
 
-  constructor(nodeType: number, namespaceURI: string | null = null) {
+  constructor(
+    nodeType: number,
+    namespaceURI: string | undefined = undefined,
+    nodeId: number | undefined = undefined,
+  ) {
     this.nodeType = nodeType;
     this.namespaceURI = namespaceURI;
+    this.nodeId = nodeId;
     this.parentNode = null;
     this.childNodes = [];
   }
@@ -24,14 +29,16 @@ export abstract class UINode {
     return this.childNodes[0] ?? null;
   }
 
-  get nextSibling(): UINode | null {
-    if (!this.parentNode) return null;
+  get nextSibling(): JuiceNode | null {
+    if (!this.parentNode) {
+      return null;
+    }
 
     const siblings = this.parentNode.childNodes;
     return siblings[siblings.indexOf(this) + 1] ?? null;
   }
 
-  contains(other: UINode | null): boolean {
+  contains(other: JuiceNode | null): boolean {
     if (other === null) return false;
     if (other === this) return true;
 
@@ -40,14 +47,18 @@ export abstract class UINode {
     );
   }
 
-  insertBefore(node: UINode, child: UINode | null): UINode {
+  insertBefore(node: JuiceNode, child: JuiceNode | null): JuiceNode {
     node.parentNode = this;
     const idx = child ? this.childNodes.indexOf(child) : -1;
 
-    if (idx >= 0) {
+    if (child && idx >= 0) {
       this.childNodes.splice(idx, 0, node);
+
+      if (this.nodeId && node.nodeId) {
+        dom.insertChildAt(idx, this.nodeId, node.nodeId);
+      }
     } else {
-      this.childNodes.push(node);
+      this.appendChild(node);
     }
 
     return node;
@@ -83,7 +94,7 @@ export abstract class UINode {
     this.eventListeners.get(type)?.delete(listener);
   }
 
-  dispatchEvent(event: UIEvent) {
+  dispatchEvent(event: JuiceEvent) {
     const listeners = this.eventListeners.get(event.type);
 
     if (listeners) {
@@ -97,13 +108,18 @@ export abstract class UINode {
     }
   }
 
-  appendChild(node: UINode): UINode {
+  appendChild(node: JuiceNode): JuiceNode {
     node.parentNode = this;
     this.childNodes.push(node);
+
+    if (this.nodeId && node.nodeId) {
+      dom.appendChild(this.nodeId, node.nodeId);
+    }
+
     return node;
   }
 
-  removeChild(child: UINode): UINode {
+  removeChild(child: JuiceNode): JuiceNode {
     const idx = this.childNodes.indexOf(child);
 
     if (idx >= 0) {
@@ -111,14 +127,22 @@ export abstract class UINode {
     }
 
     child.parentNode = null;
+
+    if (this.nodeId && child.nodeId) {
+      dom.removeChild(this.nodeId, child.nodeId);
+    }
+
     return child;
   }
 
-  prepend(node: UINode): UINode {
+  prepend(node: JuiceNode): JuiceNode {
     node.parentNode = this;
     this.childNodes.unshift(node);
+
+    if (this.nodeId && node.nodeId) {
+      dom.insertChildAt(0, this.nodeId, node.nodeId);
+    }
+
     return node;
   }
-
-  abstract toJSON(): unknown;
 }

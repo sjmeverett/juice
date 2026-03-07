@@ -2,34 +2,36 @@ import { Box, type BoxProps } from "@juice/core";
 import { useState } from "preact/hooks";
 
 export interface ButtonProps extends BoxProps {
-	buttonColor: [string, string];
+  buttonColor: [string, string];
 }
 
 export default function Button({
-	style,
-	buttonColor,
-	onPressIn,
-	onPressOut,
-	...props
+  style,
+  buttonColor,
+  onPressIn,
+  onPressOut,
+  ...props
 }: ButtonProps) {
-	const [pressed, setPressed] = useState(false);
+  const [pressed, setPressed] = useState(false);
 
-	return (
-		<Box
-			style={{
-				gap: 10,
-				...style,
-				background: pressed ? buttonColor[1] : buttonColor[0],
-			}}
-			onPressIn={(e) => {
-				setPressed(true);
-				onPressIn?.(e);
-			}}
-			onPressOut={(e) => {
-				setPressed(false);
-				onPressOut?.(e);
-			}}
-			{...props}
-		/>
-	);
+  return (
+    <Box
+      style={{
+        gap: 30,
+        ...style,
+        background: pressed ? buttonColor[1] : buttonColor[0],
+        display: "flex",
+        alignItems: "center",
+      }}
+      onPressIn={(e) => {
+        setPressed(true);
+        onPressIn?.(e);
+      }}
+      onPressOut={(e) => {
+        setPressed(false);
+        onPressOut?.(e);
+      }}
+      {...props}
+    />
+  );
 }

@@ -5,7 +5,7 @@ esbuild
     entryPoints: ["packages/app/src/index.tsx"],
     bundle: true,
     format: "iife",
-    write: false,
+    write: true,
     jsx: "automatic",
     jsxImportSource: "preact",
     loader: {

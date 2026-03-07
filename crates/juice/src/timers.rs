@@ -4,6 +4,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+use crate::engine::JsModule;
+
 #[derive(Debug)]
 struct Timer {
     id: u32,
@@ -26,8 +28,52 @@ impl Timers {
         }
     }
 
-    /// Register setTimeout, clearTimeout, setInterval, clearInterval on the JS global object.
-    pub fn register(&self, ctx: &Ctx<'_>) {
+    /// Fire any expired timers. Intervals are rescheduled; timeouts are removed.
+    pub fn tick(&self, ctx: &Ctx<'_>) {
+        let now = Instant::now();
+
+        let ready: Vec<Persistent<Function<'static>>> = {
+            let mut timers = self.timers.borrow_mut();
+            let mut ready = Vec::new();
+
+            for timer in timers.iter_mut() {
+                if timer.fire_at <= now {
+                    ready.push(timer.callback.clone());
+
+                    if let Some(interval) = timer.interval {
+                        timer.fire_at = now + interval;
+                    }
+                }
+            }
+
+            timers.retain(|t| t.interval.is_some() || t.fire_at > now);
+            ready
+        };
+
+        for cb in ready {
+            let func = cb.restore(ctx).unwrap();
+
+            if let Err(e) = func.call::<_, ()>(()).catch(&ctx) {
+                println!("Timer callback error: {}", e);
+            }
+        }
+    }
+
+    /// Drop all timers. Must be called before the Runtime is dropped.
+    pub fn clear(&self) {
+        self.timers.borrow_mut().clear();
+    }
+}
+
+fn allocate_id(next_id: &RefCell<u32>) -> u32 {
+    let mut id_ref = next_id.borrow_mut();
+    let id = *id_ref;
+    *id_ref += 1;
+    id
+}
+
+impl JsModule for Timers {
+    fn register(&self, ctx: &Ctx<'_>) {
         let timers = self.timers.clone();
         let next_id = self.next_id.clone();
 
@@ -100,47 +146,4 @@ impl Timers {
             )
             .unwrap();
     }
-
-    /// Fire any expired timers. Intervals are rescheduled; timeouts are removed.
-    pub fn tick(&self, ctx: &Ctx<'_>) {
-        let now = Instant::now();
-
-        let ready: Vec<Persistent<Function<'static>>> = {
-            let mut timers = self.timers.borrow_mut();
-            let mut ready = Vec::new();
-
-            for timer in timers.iter_mut() {
-                if timer.fire_at <= now {
-                    ready.push(timer.callback.clone());
-
-                    if let Some(interval) = timer.interval {
-                        timer.fire_at = now + interval;
-                    }
-                }
-            }
-
-            timers.retain(|t| t.interval.is_some() || t.fire_at > now);
-            ready
-        };
-
-        for cb in ready {
-            let func = cb.restore(ctx).unwrap();
-
-            if let Err(e) = func.call::<_, ()>(()).catch(&ctx) {
-                println!("Timer callback error: {}", e);
-            }
-        }
-    }
-
-    /// Drop all timers. Must be called before the Runtime is dropped.
-    pub fn clear(&self) {
-        self.timers.borrow_mut().clear();
-    }
-}
-
-fn allocate_id(next_id: &RefCell<u32>) -> u32 {
-    let mut id_ref = next_id.borrow_mut();
-    let id = *id_ref;
-    *id_ref += 1;
-    id
 }
